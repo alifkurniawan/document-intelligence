@@ -4,6 +4,4 @@ __pycache__/
 .pytest_cache/
 .env
 .env.*
-!.env.example
-google-service-account-key.json
 *.pyc
