@@ -1,62 +1,103 @@
-# Technology Constitution
+# Tech Stack
 
-## Decision summary
+## Baseline
 
-The proposed stack is retained as the default because it matches the subsystem's Python-centric parsing requirements and supports clear separation between synchronous ingestion and asynchronous normalization. These are provisional decisions: each item has an explicit seam so operational evidence can justify a later replacement.
+The initial implementation uses Python 3.14, FastAPI, PostgreSQL, SQLAlchemy, Alembic, RabbitMQ, Firebase Authentication, and Firebase Storage. These are infrastructure choices behind application interfaces where replacement is practical; they are not domain concepts.
 
-| Concern | Default | Decision rationale | Trade-off / trigger to revisit |
-|---|---|---|---|
-| Runtime | Python 3.12+ | Native ecosystem for the selected parsers and worker code. | CPU-heavy parsing and dependency isolation require worker limits and packaging discipline. |
-| HTTP API | FastAPI | Typed async API, good multipart support, and direct Pydantic integration. | Async does not make CPU-bound parsing safe; parsing stays out of request handlers. |
-| Persistence | PostgreSQL | Strong transactions, JSON support, constraints, and mature operational tooling. | Requires migrations, connection-pool management, and careful transaction boundaries. |
-| ORM / data access | SQLAlchemy 2.x | Explicit transaction control and durable repository patterns. | More ceremony than a query-only layer; avoid hiding important locking/state queries. |
-| API/domain schemas | Pydantic 2.x | Runtime validation and serialization aligned with FastAPI. | Keep persistence models separate from public contracts to avoid accidental coupling. |
-| Authentication | Firebase Authentication | Managed user identity, sign-in providers, and short-lived Firebase ID tokens. The API verifies tokens with the Firebase Admin SDK and uses the Firebase UID as the actor identity. | Token verification depends on Firebase availability and credential/configuration hygiene; authorization rules must not rely on unverified client claims. |
-| Object storage | Cloud Storage for Firebase | Firebase-backed Google Cloud Storage bucket for durable immutable bytes, streaming upload, and Firebase Storage path conventions. | Cloud Storage and PostgreSQL do not share a transaction; use pending records, explicit lifecycle states, and reconciliation. |
-| Broker | RabbitMQ | Work queues, acknowledgements, retries, and routing fit normalization jobs. | Adds operations and delivery semantics; messages must be idempotent and small. |
-| Worker | Python worker process | Reuses domain contracts and parser libraries without blocking API workers. | Requires deployment, timeout, concurrency, and poison-message handling. |
-| PDF | PyMuPDF | Fast metadata/page inspection and text/layout access for PDFs. | Native dependencies and malformed/encrypted PDF edge cases need sandboxed handling. |
-| Images | Pillow | Mature format detection and basic metadata/normalization support. | It is not OCR; decompression-bomb limits and pixel budgets are mandatory. |
-| DOCX | python-docx | Practical extraction of paragraphs, tables, and document properties. | It does not fully model every OOXML feature; preserve the original and record unsupported content. |
-| XLSX | openpyxl | Direct workbook/worksheet/cell access without requiring Excel. | Large or formula-heavy workbooks can be expensive; enforce row/cell limits and do not promise recalculation. |
-| Migrations | Alembic | Standard SQLAlchemy migration workflow. | Migration review is required because schema state is operational state. |
-| Testing | pytest + integration services | Contract, parser-fixture, API, worker, authentication, and failure-path coverage. | Requires representative adversarial fixtures and isolated Firebase emulator/storage and broker dependencies. |
+## Python 3.14
 
-## Architecture boundaries
+**Why:** The project standardizes on the current target runtime and its typing, async, and maintenance improvements.
 
-The API owns Firebase authentication context, request validation, streaming intake, idempotency, and registration. It verifies the Firebase ID token before accepting a protected request, derives actor identity from the verified `uid`, and does not parse documents.
+**Owns:** Application runtime, domain/application code, validation orchestration, adapters, and tests.
 
-The application layer owns use cases and state transitions. It depends on ports for object storage, repositories, hashing, clock, and job publishing.
+**Must not own:** Persistence semantics, object-storage semantics, message-broker guarantees, or authentication policy by implicit convention.
 
-The worker owns format detection, parser invocation, normalization, artifact persistence, and status updates. It must be restartable and safe to run more than once for the same job.
+**Constraints:** Pin and test supported dependency versions. Keep I/O boundaries explicit and avoid blocking work in async request handlers.
 
-The infrastructure layer owns FastAPI adapters, Firebase Admin initialization and ID-token verification, SQLAlchemy mappings, Cloud Storage client configuration, RabbitMQ topology, and parser adapters. Parser output must be mapped into an internal versioned normalization schema rather than exposed directly.
+## FastAPI
 
-## Data and consistency model
+**Why:** Provides typed HTTP APIs, dependency injection, OpenAPI documentation, and an appropriate async web runtime.
 
-Use a database record with a generated `document_id`, source metadata, hash, storage key/URI, lifecycle state, and timestamps. Add processing-attempt records rather than overwriting failure history. Persist a normalization artifact separately and link it to the source hash and normalizer version.
+**Owns:** HTTP routing, request/response schemas, authentication context integration, and HTTP status mapping.
 
-Cloud Storage for Firebase and PostgreSQL do not share a transaction. The registration workflow therefore needs explicit states such as `uploading`, `registered`, `processing`, `normalized`, `failed`, and `rejected`, plus a reconciliation command/job for orphaned objects or database rows. A transactional outbox is preferred for reliable job publication once the database is authoritative; if introduced, it is an architectural addition, not an invisible broker replacement.
+**Must not own:** Ingestion business rules, transaction orchestration, direct SQL, object-storage implementation, or message publishing logic.
 
-Firebase Authentication is the identity provider, but PostgreSQL remains authoritative for document ownership, ingestion state, processing history, and application metadata. Store the verified Firebase `uid` and selected immutable identity snapshot fields needed for audit; never trust an actor ID supplied in the request body. Firebase custom claims may carry coarse roles, while resource-level authorization is enforced by the API against PostgreSQL ownership and policy data.
+**Constraints:** API handlers call application services. Schemas are not used as domain entities by accident.
 
-Source artifacts use a controlled path such as `documents/{document_id}/source/{safe_filename}` in the configured Firebase Storage bucket; the filename component must be sanitized or replaced with an opaque generated name. The backend uses Admin SDK/server credentials for ingestion and worker access; this server-side access is not a substitute for API authorization. Client-facing download or preview access, if added, must use short-lived signed URLs or an authorized backend proxy and must not expose bucket credentials.
+## PostgreSQL and SQLAlchemy
 
-## Technology alternatives and replacement policy
+**Why:** PostgreSQL provides durable transactional metadata storage; SQLAlchemy provides a maintainable ORM and database abstraction.
 
-No technology is silently replaced in this constitution.
+**Owns:** Documents, artifacts, jobs, ownership metadata, state, hashes, storage references, timestamps, and indexes; SQLAlchemy maps these records and manages database access.
 
-Potential future evaluations:
+**Must not own:** Binary document contents, file validation policy, object storage, or RabbitMQ delivery.
 
-- Replace RabbitMQ with a managed queue when operational ownership, cross-region delivery, or elastic throughput outweighs RabbitMQ routing flexibility. Impact: change the job adapter and operational topology; retain the job contract and idempotency rules.
-- Replace SQLAlchemy with a thinner SQL layer only if ORM behavior measurably obscures performance-critical queries. Impact: repository implementations change; domain models and migration ownership remain.
-- Add a dedicated conversion service only if DOCX/XLSX fidelity or PDF rendering requirements exceed the selected libraries. Trade-off: improved fidelity versus latency, cost, data-transfer exposure, and a new availability dependency.
-- Add OCR (for example, a separately governed OCR engine) only when scanned-PDF/image text extraction is in scope. It is not assumed by the current stack because OCR changes latency, privacy, quality evaluation, and artifact contracts.
+**Constraints:** Store metadata only, use transactions for document/artifact/job coordination, enforce uniqueness and state invariants in the schema where appropriate, and avoid leaking ORM models into the domain/application contract.
 
-Any replacement proposal must document the reason, trade-offs, interface impact, migration/backfill strategy, failure semantics, and rollback plan before implementation.
+## Alembic
 
-## Operational requirements
+**Why:** Makes PostgreSQL schema evolution reviewable, repeatable, and deployable.
 
-Configuration comes from environment-backed settings with safe defaults and no secrets in source control. Metrics must cover accepted/rejected uploads, bytes, queue depth, processing latency, parser failures, retries, and normalization success. Structured logs use correlation ID, document ID, attempt ID, and safe error code. Traces should cross API, database, storage, broker, and worker boundaries when the deployment platform supports them.
+**Owns:** Versioned migrations and schema changes.
 
-Firebase configuration must be environment-backed. Service-account credentials must be supplied through the deployment secret mechanism or workload identity, never committed to the repository or returned in API responses. Local tests should use the Firebase Auth and Storage emulators where practical.
+**Must not own:** Runtime data workflows, backfills hidden inside request handling, or business orchestration.
+
+**Constraints:** Every schema change has a migration; migrations must be safe to run in the documented deployment sequence.
+
+## RabbitMQ
+
+**Why:** Provides the asynchronous hand-off between ingestion and downstream processing.
+
+**Owns:** Durable message delivery configuration, queues/exchanges, acknowledgements, and bounded retry/dead-letter behavior as specified.
+
+**Must not own:** Binary payload storage, document metadata as the source of truth, authentication, or processing results.
+
+**Constraints:** Messages carry `document_id`, `job_id`, and required execution metadata only. Publishing and database state must be coordinated so consumers do not receive unusable references; the chosen outbox or equivalent strategy must be documented before implementation.
+
+## Firebase Authentication
+
+**Why:** Provides email-based authentication without building an identity system in scope.
+
+**Owns:** Identity proof and token verification.
+
+**Must not own:** Document ownership records, ingestion authorization rules, document metadata, or processing state.
+
+**Constraints:** The API verifies tokens and maps the stable Firebase user identifier to an authenticated principal. Secrets and project configuration come from environment variables. Provider-specific code stays at the infrastructure boundary.
+
+## Firebase Storage
+
+**Why:** Provides managed object storage suitable for immutable original artifacts and their storage references.
+
+**Owns:** Binary artifact bytes, object paths, upload/download operations, and storage metadata needed by the adapter.
+
+**Must not own:** Document registration, authorization policy, processing state, or semantic processing.
+
+**Constraints:** Store originals under unique document-scoped paths, prevent accidental overwrite, verify size/hash as part of acceptance, and keep the storage adapter replaceable. Local filesystem or another object store may be used in tests through the same interface.
+
+## Repository / Service architecture
+
+The module structure follows `API -> application/service -> domain -> repository/infrastructure`.
+
+* API owns HTTP concerns and authenticated request context.
+* Application services orchestrate validation, transaction boundaries, artifact storage, registration, and job creation.
+* Domain owns document, artifact, processing-state concepts and invariants without provider imports.
+* Repositories hide PostgreSQL access.
+* Infrastructure implements database sessions, Firebase adapters, RabbitMQ publishers, and format-specific technical inspection.
+
+Use interfaces only at meaningful external boundaries: repositories, artifact storage, authentication, message publishing, and file validation/inspection. Do not add speculative ports, event buses, or microservices.
+
+## Configuration and secrets
+
+All environment-specific values come from environment variables loaded from a local `.env` during development and injected by the deployment environment in production. This includes PostgreSQL and RabbitMQ URLs, Firebase project/configuration, storage bucket, file limits, supported MIME types/extensions, queue names, retry settings, and environment name. `.env` files containing secrets are ignored and `.env.example` documents required names without credentials. No credentials or connection strings are hard-coded.
+
+## Testing, linting, and formatting
+
+Use pytest for unit, integration, and API tests. Use isolated PostgreSQL/RabbitMQ-backed integration environments where behavior depends on their guarantees; fake or local adapters are acceptable for focused unit tests. Use Ruff for linting and formatting, with configuration committed in project metadata. Tests must cover validation, ownership, immutability, transaction/recovery behavior, message shape, and non-blocking upload semantics.
+
+## Dependency management
+
+Use the repository's Python dependency manager and lockfile (currently `pyproject.toml` with `uv.lock`). Runtime and development dependencies must be declared there and kept reproducible. Do not add libraries without a documented responsibility in the scope.
+
+## Containerization
+
+Provide containerization only for reproducible local and deployment environments: an application image plus PostgreSQL and RabbitMQ service dependencies, with Firebase accessed through configured credentials or test doubles. Containers must receive configuration through environment variables and must not bake secrets into images.

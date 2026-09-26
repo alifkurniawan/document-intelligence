@@ -1,93 +1,74 @@
-# Mission: Document Ingestion and Normalization
+# Mission
 
-## Purpose
+## Project mission
 
-Establish a reliable backend boundary that accepts external legal and Shariah documents, preserves the received artifact as the immutable source of truth, validates and registers it, and produces a canonical `Document Object` for downstream document-intelligence processing.
+Build a dependable, asynchronous Document Ingestion subsystem that accepts an authenticated user's document, validates it, preserves the uploaded original, records its metadata, creates a downstream processing job, and reports the resulting document and processing status.
 
-This subsystem optimizes for provenance, repeatability, safe failure, and explicit processing state. It must never make the normalized representation the replacement for the original artifact.
+## Problem being solved
 
-## Scope
+External documents need a consistent entry point into the platform with clear ownership, validation, durable provenance, and a reliable hand-off to downstream processing. The ingestion boundary must make the original file reproducible while remaining independent of any particular upload channel or downstream intelligence implementation.
 
-The initial subsystem includes:
+## System purpose and scope
 
-- upload/import of PDF, scanned PDF, PNG, JPEG, DOCX, and XLSX files;
-- authentication of protected API requests with Firebase Authentication ID tokens;
-- request-level validation of filename, media type, size, and supported format;
-- streaming transfer to Cloud Storage for Firebase;
-- SHA-256 content hashing and artifact identity;
-- document registration and lifecycle state in PostgreSQL;
-- asynchronous processing-job creation and delivery;
-- format-specific normalization into a versioned normalization artifact;
-- construction of the canonical `Document Object`;
-- idempotency, retry, observability, and failure recording sufficient for safe reprocessing.
+The system is a pragmatic modular monolith for Document Ingestion. It supports a core ingestion service that can be called by web upload, batch-upload, and import adapters. The core workflow is:
 
-The subsystem does not initially include OCR quality optimization, legal clause extraction, semantic search, document editing, human review workflows, fine-grained authorization policy design, or a user interface. Those capabilities consume the canonical object and are downstream concerns. Authentication and the minimum ownership check for ingestion are in scope; the API must reject unauthenticated requests and derive the actor from the verified Firebase UID.
+1. Authenticate and authorize the user.
+2. Accept and validate the input.
+3. Register a logical document and its metadata.
+4. Persist the original artifact immutably.
+5. Create an asynchronous processing job containing references, not file bytes.
+6. Return the document information and processing status without waiting for downstream processing.
 
-## Architectural flow
+The initial supported formats are PDF, scanned PDF, JPEG, PNG, other explicitly allowlisted image formats, DOCX, and XLSX. A scanned PDF remains an input artifact; ingestion does not perform OCR.
 
-```text
-External input
-  -> Firebase Authentication ID token verification
-  -> upload/import endpoint
-  -> validation
-  -> original artifact persisted in Cloud Storage for Firebase
-  -> document registered
-  -> processing job queued
-  -> normalization worker
-  -> normalization artifact persisted
-  -> canonical Document Object
-```
+## Non-goals and boundary
 
-Registration and original-artifact persistence are treated as one business operation even though Cloud Storage for Firebase and the database are separate systems. The implementation must use an explicit pending/committed state and reconciliation path; it must not claim successful ingestion when only one side succeeded.
+Document Ingestion explicitly does **not** perform Document Understanding. It must not implement or require OCR, VLM/LLM understanding, classification, entity extraction, clause extraction, obligation extraction, semantic analysis, embeddings, RAG, legal analysis, or Shariah analysis. These belong to downstream systems.
 
-## Source-of-truth rules
+Normalization is optional and technical only. It may read basic properties, determine page count when reliable, or produce technical metadata needed by a downstream processor. It must not infer document meaning, and it must not convert every input into another physical format without a concrete requirement. A Canonical Document Representation is not mandatory; the original artifact plus metadata is the default design.
 
-1. The original bytes are immutable after successful ingestion.
-2. The stored SHA-256 hash is calculated from the received bytes and is independently verifiable.
-3. Normalization is derived data. It is versioned, replaceable, and never used to reconstruct the source artifact.
-4. Every derived record references the document identity, original hash, normalizer version, and processing attempt.
-5. A retry may create a new processing attempt, but must not create a second logical document for the same idempotent request.
+## Document and Artifact
 
-## Canonical Document Object
+* **Document** is the logical record registered in the platform and identified by a unique `document_id`.
+* **Artifact** is a physical file associated with a document. The initial artifact is the uploaded original; future technical derivatives may be added without replacing it.
 
-The first contract is intentionally small and stable:
+The original artifact is the source of truth. It must remain independently available and reproducible regardless of normalization, processing results, OCR results, or AI-generated results.
 
-```json
-{
-  "document_id": "uuid",
-  "original_file": {
-    "filename": "contract.pdf",
-    "mime_type": "application/pdf",
-    "size": 123456,
-    "hash": "sha256:...",
-    "pages": 12,
-    "storage_uri": "gs://firebase-storage-bucket/documents/uuid/source/contract.pdf"
-  },
-  "metadata": {
-    "uploaded_at": "2026-01-01T00:00:00Z",
-    "uploaded_by": "firebase-uid"
-  },
-  "processing_status": "queued"
-}
-```
+## Original-artifact policy
 
-`pages` is a best-effort structural count. For XLSX it may represent worksheets or remain null until a contract decision is made; it must not be fabricated. MIME type is validated but format detection should also inspect file signatures where practical.
+Original files are immutable and must never be overwritten. The system stores the original outside PostgreSQL, while PostgreSQL stores metadata and a storage reference. At minimum, metadata includes the original filename, MIME type, size, SHA-256 hash, storage URI/reference, upload time, and authenticated uploader. Object paths should be uniquely scoped to the document and original artifact; retries must not replace an existing original silently.
 
-The status vocabulary begins with `queued`, `processing`, `normalized`, `failed`, and `rejected`. State transitions are monotonic per attempt, auditable, and controlled by the service rather than client input.
+Binary contents must not be stored in PostgreSQL or placed in RabbitMQ messages. RabbitMQ messages contain identifiers such as `document_id` and `job_id`, plus the minimum execution metadata required by the consumer.
 
-## Quality and safety invariants
+## Ingestion lifecycle
 
-- Never load an unbounded upload into memory.
-- Enforce configurable maximum size and resource budgets before expensive parsing.
-- Treat malformed, encrypted, password-protected, or parser-hostile files as controlled failures.
-- Isolate parsing from the API process and apply worker timeouts.
-- Do not log document contents, credentials, or presigned URLs.
-- Require a valid Firebase ID token for protected ingestion endpoints; use its verified `uid` as `uploaded_by` and reject client-supplied actor identity.
-- Keep Firebase service-account credentials and bucket configuration outside source control.
-- Keep enough metadata to reproduce why a file was accepted, rejected, or failed.
-- Return stable error codes and correlation identifiers.
-- Make all external integrations replaceable behind ports/interfaces.
+The lifecycle is `received -> validating -> registered/stored -> queued`, followed by downstream-owned states `processing`, `completed`, or `failed`. Exact persistence transitions and recovery behavior are defined by feature specifications and must preserve the invariant that a job cannot instruct a consumer to read an uncommitted or missing original artifact.
 
-## Definition of done for this constitution
+The single-document upload workflow is the first MVP path. Batch and import are adapters that invoke the same core service rather than separate business workflows.
 
-An implementation is foundationally complete when a supported file can be uploaded, durably registered, processed asynchronously, and represented by the canonical object; when invalid input is rejected deterministically; when worker failure is retryable and observable; and when the original artifact and its hash remain independently verifiable.
+## Core engineering principles
+
+1. Preserve provenance: the original artifact is immutable source of truth.
+2. Keep ingestion separate from understanding.
+3. Make long-running work asynchronous; upload responses do not wait for processing.
+4. Prefer a simple, modular, testable monolith over premature microservices.
+5. Isolate domain/application logic from PostgreSQL, RabbitMQ, Firebase, and storage providers where practical.
+6. Keep abstractions proportional to current requirements; document architecture decisions.
+7. Load credentials, connection strings, and configuration from environment variables; never hard-code secrets.
+8. Validate type, extension, size, readability/integrity, and appropriate basic format properties before acceptance.
+9. Make retries safe and observable without overcomplicating the first implementation.
+
+## Important invariants
+
+* Every accepted document has one unique `document_id` and an authenticated owner.
+* An accepted original has verifiable filename, MIME type, size, SHA-256, and storage reference metadata.
+* The original artifact cannot be overwritten by normalization or processing.
+* PostgreSQL contains metadata, not document binaries.
+* RabbitMQ contains job references, not document binaries.
+* A processing job is created only after the document and original-artifact metadata can be durably resolved.
+* A user can operate only on documents allowed for that account; the initial authorization model is account ownership.
+* Downstream processing can be retried from the original artifact.
+
+## Definition of Done
+
+The ingestion subsystem is done when an authenticated user can upload each supported input through the core API, receive deterministic validation errors for unsupported or invalid files, obtain a durable document and original-artifact record, retrieve the immutable original through its storage reference, observe a queued asynchronous job, and see safe failure/retry behavior. Automated unit, integration, and API tests cover the workflow and invariants; migrations, configuration, operational documentation, and explicit boundaries to Document Understanding are documented.
