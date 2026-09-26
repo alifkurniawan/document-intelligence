@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    profiles: [foundation]
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-app}"
+      POSTGRES_USER: "${POSTGRES_USER:-app}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-app}"
+    profiles: [future]
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    profiles: [future]
+
