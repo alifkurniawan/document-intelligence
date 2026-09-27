@@ -201,7 +201,7 @@ metrics, and the recovery runbook are implemented.
 
 **Acceptance criteria:** Validation, storage, database, broker, and downstream failures have explicit behavior; operators can identify and safely recover incomplete work.
 
-## Phase 16 — Documentation and release readiness
+## Phase 16 — Documentation and release readiness — Complete
 
 **Objective:** Make the ingestion subsystem usable and maintainable.
 
@@ -212,3 +212,7 @@ metrics, and the recovery runbook are implemented.
 **Dependencies:** All preceding phases.
 
 **Acceptance criteria:** A new developer can run the service and tests; an API consumer can perform authenticated single upload; operators understand storage, queue, retries, and recovery; future format additions have a documented extension path.
+
+Implemented in `README.md` and `docs/`: API contract, architecture decisions,
+configuration, deployment/migration guidance, security notes, recovery operations,
+Document Understanding boundary, and release checklist.

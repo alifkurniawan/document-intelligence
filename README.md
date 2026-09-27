@@ -1,10 +1,12 @@
 # Legal Document Intelligence Platform
 
-Phase 2 adds typed, environment-driven configuration to the runnable service foundation.
 The service exposes an unauthenticated `GET /health` liveness endpoint and an
-authenticated single-document upload endpoint. The upload workflow stores originals
-outside PostgreSQL, persists metadata, and returns a queued status; extraction remains
-out of scope while processing hand-off is performed through the transactional outbox.
+authenticated single-document ingestion workflow. It validates and immutably stores
+originals outside PostgreSQL, persists metadata, and returns a queued status; Document
+Understanding remains downstream. See the [API contract](docs/api.md),
+[architecture](docs/architecture.md), [configuration](docs/configuration.md),
+[deployment guide](docs/deployment.md), [security notes](docs/security.md), and
+[release checklist](docs/release-checklist.md).
 
 ## Local development
 
@@ -105,8 +107,8 @@ The foundation Compose profile runs the application only:
 docker compose --profile foundation up --build
 ```
 
-PostgreSQL and RabbitMQ are declared under the `future` profile as placeholders for
-later phases and are not consumed by the Phase 1 application.
+PostgreSQL and RabbitMQ are available under the `integration` profile for local
+boundary tests; the `foundation` profile runs the application with local defaults.
 
 ## CI
 
