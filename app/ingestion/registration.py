@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.domain.models import Artifact, Document, DocumentStatus, ProcessingJob
+from app.domain.models import Artifact, Document, DocumentStatus, OutboxMessage, ProcessingJob
 from app.ingestion.storage import ArtifactStorage
 from app.ingestion.validation import FileValidator, ValidatedFile
 from app.repositories.contracts import MetadataUnitOfWork
@@ -25,10 +25,12 @@ class DocumentRegistrationService:
         validator: FileValidator,
         storage: ArtifactStorage,
         unit_of_work_factory: Callable[[], MetadataUnitOfWork],
+        routing_key: str = "document.process",
     ) -> None:
         self.validator = validator
         self.storage = storage
         self.unit_of_work_factory = unit_of_work_factory
+        self.routing_key = routing_key
 
     async def register(
         self, *, owner_id: str, filename: str | None, client_mime: str | None, source
@@ -67,6 +69,11 @@ class DocumentRegistrationService:
                 await unit_of_work.documents.add(document)
                 await unit_of_work.artifacts.add(artifact)
                 await unit_of_work.jobs.add(job)
+                # Older in-memory test doubles may not expose the phase-10 port.
+                if hasattr(unit_of_work, "outbox"):
+                    await unit_of_work.outbox.add(
+                        OutboxMessage.for_job(job, routing_key=self.routing_key)
+                    )
                 await unit_of_work.commit()
             return RegistrationResult(document=document, artifact=artifact, job=job)
         except Exception:

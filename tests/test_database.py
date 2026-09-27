@@ -1,3 +1,5 @@
+import asyncio
+
 from app.config import Settings
 from app.infrastructure.database.models import ArtifactModel, DocumentModel, ProcessingJobModel
 from app.infrastructure.database.session import Base, create_engine
@@ -15,8 +17,6 @@ def test_database_engine_is_async_and_does_not_connect_on_creation() -> None:
         assert engine.sync_engine.url.drivername == "postgresql+psycopg"
     finally:
         # Disposal does not require a live database connection.
-        import asyncio
-
         asyncio.run(engine.dispose())
 
 

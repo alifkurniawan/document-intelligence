@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 from dataclasses import dataclass, field
 
@@ -57,8 +58,6 @@ def test_registration_stores_verifiable_original_and_queued_job() -> None:
         storage=storage,
         unit_of_work_factory=lambda: MemoryUnitOfWork(state),
     )
-
-    import asyncio
 
     result = asyncio.run(
         service.register(

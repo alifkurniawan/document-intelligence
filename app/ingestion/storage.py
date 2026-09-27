@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import BinaryIO, Protocol
 from uuid import UUID
 
+from firebase_admin import storage
+
 from app.ingestion.errors import StorageError
 
 
@@ -127,8 +129,6 @@ class FirebaseArtifactStorage:
         reference = f"documents/{document_id}/original/{filename}"
 
         def upload() -> None:
-            from firebase_admin import storage
-
             blob = storage.bucket(self.bucket_name).blob(reference)
             if blob.exists():
                 raise StorageError("original artifact already exists")
@@ -144,8 +144,6 @@ class FirebaseArtifactStorage:
 
     async def read(self, storage_reference: str) -> bytes:
         try:
-            from firebase_admin import storage
-
             return await asyncio.to_thread(
                 storage.bucket(self.bucket_name).blob(storage_reference).download_as_bytes
             )
@@ -154,8 +152,6 @@ class FirebaseArtifactStorage:
 
     async def delete(self, storage_reference: str) -> None:
         try:
-            from firebase_admin import storage
-
             await asyncio.to_thread(storage.bucket(self.bucket_name).blob(storage_reference).delete)
         except Exception as exc:
             raise StorageError("Firebase Storage cleanup failed") from exc

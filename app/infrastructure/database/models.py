@@ -83,4 +83,22 @@ class ProcessingJobModel(Base):
     original_artifact: Mapped[ArtifactModel] = relationship(back_populates="jobs")
 
 
-__all__ = ["ArtifactModel", "DocumentModel", "ProcessingJobModel"]
+class OutboxMessageModel(Base):
+    __tablename__ = "outbox_messages"
+
+    outbox_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("processing_jobs.job_id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    document_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    original_artifact_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    routing_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+__all__ = ["ArtifactModel", "DocumentModel", "OutboxMessageModel", "ProcessingJobModel"]

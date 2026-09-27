@@ -114,7 +114,7 @@ Production hardening follow-ups remain for atomic Firebase non-overwrite semanti
 Firebase SDK initialization, true streaming storage, stronger PDF integrity checks,
 and final error-schema alignment.
 
-## Phase 10 — RabbitMQ integration
+## Phase 10 — RabbitMQ integration — Complete
 
 **Objective:** Publish durable processing job references.
 
@@ -126,7 +126,9 @@ and final error-schema alignment.
 
 **Acceptance criteria:** No binary data appears in messages; messages are traceable to a persisted job and use documented delivery settings.
 
-## Phase 11 — Asynchronous processing hand-off
+Implemented with durable exchange/queue/DLQ declarations, publisher confirms, reference-only messages, environment-backed settings, and a transactional outbox.
+
+## Phase 11 — Asynchronous processing hand-off — Complete
 
 **Objective:** Make job state and retry behavior operationally safe.
 
@@ -138,7 +140,9 @@ and final error-schema alignment.
 
 **Acceptance criteria:** Upload returns before processing completion; transient failures can retry; permanent failures are visible and do not silently lose the original.
 
-## Phase 12 — Batch/import adapter
+Implemented with provider-neutral processing contracts, legal job transitions, bounded exponential retry policy, and dead-letter decisions.
+
+## Phase 12 — Batch/import adapter — Deferred
 
 **Objective:** Add alternate entry points without duplicating ingestion rules.
 
@@ -150,7 +154,9 @@ and final error-schema alignment.
 
 **Acceptance criteria:** Each item follows the same validation, ownership, storage, registration, and job workflow; one failed item does not corrupt other items; no new domain semantics are introduced.
 
-## Phase 13 — Normalization, only when required
+Deferred until a concrete caller exists. The future adapter must reuse the single-document workflow, use bounded concurrency, isolate per-item failures, and introduce a dedicated idempotency key.
+
+## Phase 13 — Normalization, only when required — Deferred
 
 **Objective:** Add technical normalization only for a demonstrated downstream compatibility need.
 
@@ -161,6 +167,8 @@ and final error-schema alignment.
 **Dependencies:** A concrete downstream processor requirement.
 
 **Acceptance criteria:** Original remains source of truth; no OCR or semantic extraction is introduced; no automatic conversion is added without a documented need.
+
+Deferred because no concrete downstream compatibility requirement exists. No normalizer is included in the current slice.
 
 ## Phase 14 — Integration testing
 

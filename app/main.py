@@ -87,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 validator=FileValidator(configured),
                 storage=storage,
                 unit_of_work_factory=lambda: SqlAlchemyMetadataUnitOfWork(factory),
+                routing_key=configured.rabbitmq_routing_key,
             )
         return application.state.registration_service
 

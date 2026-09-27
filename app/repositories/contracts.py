@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from app.domain.models import Artifact, Document, ProcessingJob
+from app.domain.models import Artifact, Document, OutboxMessage, ProcessingJob
 
 
 class DocumentRepository(ABC):
@@ -34,6 +34,23 @@ class ProcessingJobRepository(ABC):
     @abstractmethod
     async def get(self, job_id: UUID) -> ProcessingJob | None: ...
 
+    @abstractmethod
+    async def update(self, job: ProcessingJob) -> ProcessingJob: ...
+
+
+class OutboxRepository(ABC):
+    @abstractmethod
+    async def add(self, message: OutboxMessage) -> OutboxMessage: ...
+
+    @abstractmethod
+    async def pending(self, *, limit: int = 100) -> list[OutboxMessage]: ...
+
+    @abstractmethod
+    async def mark_published(self, outbox_id: UUID) -> None: ...
+
+    @abstractmethod
+    async def mark_attempted(self, outbox_id: UUID) -> None: ...
+
 
 class MetadataUnitOfWork(ABC):
     """Transaction boundary for document and artifact metadata."""
@@ -41,6 +58,7 @@ class MetadataUnitOfWork(ABC):
     documents: DocumentRepository
     artifacts: ArtifactRepository
     jobs: ProcessingJobRepository
+    outbox: OutboxRepository
 
     @abstractmethod
     async def __aenter__(self) -> MetadataUnitOfWork: ...
@@ -64,5 +82,6 @@ __all__ = [
     "ArtifactRepository",
     "DocumentRepository",
     "MetadataUnitOfWork",
+    "OutboxRepository",
     "ProcessingJobRepository",
 ]

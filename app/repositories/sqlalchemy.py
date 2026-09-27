@@ -15,13 +15,20 @@ from app.domain.models import (
     Document,
     DocumentStatus,
     JobStatus,
+    OutboxMessage,
     ProcessingJob,
 )
-from app.infrastructure.database.models import ArtifactModel, DocumentModel, ProcessingJobModel
+from app.infrastructure.database.models import (
+    ArtifactModel,
+    DocumentModel,
+    OutboxMessageModel,
+    ProcessingJobModel,
+)
 from app.repositories.contracts import (
     ArtifactRepository,
     DocumentRepository,
     MetadataUnitOfWork,
+    OutboxRepository,
     ProcessingJobRepository,
 )
 from app.repositories.errors import RepositoryConflict
@@ -170,6 +177,74 @@ class SqlAlchemyProcessingJobRepository(ProcessingJobRepository):
         model = await self.session.get(ProcessingJobModel, job_id)
         return _job_entity(model) if model is not None else None
 
+    async def update(self, job: ProcessingJob) -> ProcessingJob:
+        model = await self.session.get(ProcessingJobModel, job.job_id)
+        if model is None:
+            raise RepositoryConflict("job does not exist")
+        model.status = job.status.value
+        model.retry_count = job.retry_count
+        model.last_error = job.last_error
+        model.updated_at = job.updated_at
+        await self.session.flush()
+        return job
+
+
+def _outbox_entity(model: OutboxMessageModel) -> OutboxMessage:
+    return OutboxMessage(
+        outbox_id=model.outbox_id,
+        job_id=model.job_id,
+        document_id=model.document_id,
+        original_artifact_id=model.original_artifact_id,
+        routing_key=model.routing_key,
+        attempts=model.attempts,
+        published_at=_aware(model.published_at) if model.published_at else None,
+        created_at=_aware(model.created_at),
+    )
+
+
+class SqlAlchemyOutboxRepository(OutboxRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def add(self, message: OutboxMessage) -> OutboxMessage:
+        self.session.add(
+            OutboxMessageModel(
+                outbox_id=message.outbox_id,
+                job_id=message.job_id,
+                document_id=message.document_id,
+                original_artifact_id=message.original_artifact_id,
+                routing_key=message.routing_key,
+                attempts=message.attempts,
+                published_at=message.published_at,
+                created_at=message.created_at,
+            )
+        )
+        await self.session.flush()
+        return message
+
+    async def pending(self, *, limit: int = 100) -> list[OutboxMessage]:
+        rows = (
+            await self.session.scalars(
+                select(OutboxMessageModel)
+                .where(OutboxMessageModel.published_at.is_(None))
+                .order_by(OutboxMessageModel.created_at)
+                .limit(limit)
+            )
+        ).all()
+        return [_outbox_entity(row) for row in rows]
+
+    async def mark_published(self, outbox_id: UUID) -> None:
+        model = await self.session.get(OutboxMessageModel, outbox_id)
+        if model is not None:
+            model.published_at = datetime.now(UTC)
+            await self.session.flush()
+
+    async def mark_attempted(self, outbox_id: UUID) -> None:
+        model = await self.session.get(OutboxMessageModel, outbox_id)
+        if model is not None:
+            model.attempts += 1
+            await self.session.flush()
+
 
 class SqlAlchemyMetadataUnitOfWork(MetadataUnitOfWork):
     """Async transaction boundary for metadata repositories."""
@@ -183,6 +258,7 @@ class SqlAlchemyMetadataUnitOfWork(MetadataUnitOfWork):
         self.documents = SqlAlchemyDocumentRepository(self.session)
         self.artifacts = SqlAlchemyArtifactRepository(self.session)
         self.jobs = SqlAlchemyProcessingJobRepository(self.session)
+        self.outbox = SqlAlchemyOutboxRepository(self.session)
         return self
 
     async def __aexit__(
@@ -212,5 +288,6 @@ __all__ = [
     "SqlAlchemyArtifactRepository",
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyMetadataUnitOfWork",
+    "SqlAlchemyOutboxRepository",
     "SqlAlchemyProcessingJobRepository",
 ]

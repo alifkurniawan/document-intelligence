@@ -3,8 +3,8 @@
 Phase 2 adds typed, environment-driven configuration to the runnable service foundation.
 The service exposes an unauthenticated `GET /health` liveness endpoint and an
 authenticated single-document upload endpoint. The upload workflow stores originals
-outside PostgreSQL, persists metadata, and returns a queued status; extraction and
-RabbitMQ publishing remain out of scope.
+outside PostgreSQL, persists metadata, and returns a queued status; extraction remains
+out of scope while processing hand-off is performed through the transactional outbox.
 
 ## Local development
 
@@ -22,10 +22,13 @@ variables or a local `.env` file. Supported environments are `development`, `tes
 `production`; production requires database, RabbitMQ, and Firebase settings. See
 `.env.example` for the complete reference. `LOG_LEVEL` defaults to `INFO`.
 
-RabbitMQ configuration reserves three retries with exponential backoff, followed by
-routing to the configured Dead Letter Queue. Publishing and consuming are implemented
-in later phases. Local uploads use `STORAGE_BACKEND=filesystem` and write under
-`STORAGE_ROOT`; production requires Firebase Storage and Firebase email-auth tokens.
+RabbitMQ uses one durable processing queue, publisher confirms, three bounded
+exponential-backoff retries, and a durable Dead Letter Queue. Accepted uploads write a
+reference-only message to a transactional PostgreSQL outbox in the same transaction as
+the job; an outbox dispatcher publishes it and marks it published only after broker
+confirmation. Messages contain references, never file bytes. Local uploads use
+`STORAGE_BACKEND=filesystem` and write under `STORAGE_ROOT`; production requires
+Firebase Storage and Firebase email-auth tokens.
 
 ## Single-document upload
 
@@ -53,9 +56,16 @@ INTEGRATION_DATABASE_URL=postgresql://app:app@localhost:5432/app uv run pytest t
 docker compose --profile integration down
 ```
 
-The initial migration creates document, artifact, and processing-job metadata tables.
-It stores no binary document contents. Repository operations are async and owner-scoped;
-the registration service will create the initial processing job in a later phase.
+The migrations create document, artifact, processing-job, and transactional-outbox
+metadata tables. They store no binary document contents. Repository operations are async
+and owner-scoped. The outbox is the recovery boundary between a committed job and
+RabbitMQ publication.
+
+Batch/import remains a deferred adapter: when introduced, it must reuse the
+single-document registration workflow, report per-item results, support cancellation
+and bounded concurrency, and introduce a dedicated idempotency key. Normalization is
+also deferred; original artifacts remain immutable source of truth and no normalizer is
+included in this slice.
 
 ## Quality checks
 

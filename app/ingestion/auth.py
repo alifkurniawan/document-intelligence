@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Protocol
+
+from firebase_admin import auth
 
 from app.ingestion.errors import AuthenticationError
 
@@ -24,10 +27,6 @@ class FirebaseAuthVerifier:
         if not token:
             raise AuthenticationError("authentication token is required")
         try:
-            import asyncio
-
-            from firebase_admin import auth
-
             claims = await asyncio.to_thread(auth.verify_id_token, token)
         except Exception as exc:
             raise AuthenticationError("invalid authentication token") from exc

@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     rabbitmq_retry_jitter: bool = False
     rabbitmq_dlq_exchange: str = "document-ingestion-dlx"
     rabbitmq_dlq_queue: str = "document-processing-dlq"
+    rabbitmq_prefetch_count: int = Field(default=10, ge=1)
+    rabbitmq_publish_timeout_seconds: float = Field(default=10.0, gt=0)
 
     firebase_project_id: str | None = None
     firebase_credentials_path: str | None = None

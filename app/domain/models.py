@@ -195,3 +195,38 @@ class ProcessingJob:
             last_error=error if status == JobStatus.FAILED else None,
             updated_at=_utc_now(),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxMessage:
+    """A durable, reference-only message waiting for broker publication."""
+
+    outbox_id: UUID
+    job_id: UUID
+    document_id: UUID
+    original_artifact_id: UUID
+    routing_key: str
+    attempts: int
+    published_at: datetime | None
+    created_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.attempts < 0:
+            raise DomainError("attempts cannot be negative")
+        if self.created_at.tzinfo is None:
+            raise DomainError("created_at must be timezone-aware")
+        if self.published_at is not None and self.published_at.tzinfo is None:
+            raise DomainError("published_at must be timezone-aware")
+
+    @classmethod
+    def for_job(cls, job: ProcessingJob, *, routing_key: str) -> OutboxMessage:
+        return cls(
+            outbox_id=uuid4(),
+            job_id=job.job_id,
+            document_id=job.document_id,
+            original_artifact_id=job.original_artifact_id,
+            routing_key=routing_key,
+            attempts=0,
+            published_at=None,
+            created_at=_utc_now(),
+        )
