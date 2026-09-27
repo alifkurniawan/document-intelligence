@@ -77,6 +77,18 @@ uv run pytest
 
 To format files, run `uv run ruff format .`.
 
+## Diagnostics and recovery
+
+Every HTTP response includes `X-Correlation-ID`; clients may provide a safe
+`X-Correlation-ID` value and the service propagates it to logs and processing
+messages. Public errors use `{code, detail, correlation_id}` and never expose
+provider credentials or document bytes. Metrics are defined for API failures,
+outbox publication, retries, dead letters, and recovery outcomes.
+
+Recovery is operator-triggered and dry-run-first. See
+[`docs/recovery-runbook.md`](docs/recovery-runbook.md) for diagnosis,
+reconciliation, bounded outbox retry, DLQ handling, and escalation.
+
 ## Container
 
 The image uses the locked dependency set and does not copy environment files or

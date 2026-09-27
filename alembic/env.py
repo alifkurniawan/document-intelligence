@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.infrastructure.database.models import (  # noqa: F401
     ArtifactModel,
     DocumentModel,
+    OutboxMessageModel,
     ProcessingJobModel,
 )
 from app.infrastructure.database.session import Base

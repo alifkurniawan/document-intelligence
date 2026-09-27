@@ -15,3 +15,15 @@ class AuthenticationError(IngestionError):
 
 class StorageError(IngestionError):
     """The artifact storage boundary could not complete an operation."""
+
+
+class AuthorizationError(IngestionError):
+    """The authenticated owner is not allowed to access a resource."""
+
+
+class NotFoundError(IngestionError):
+    """The requested resource does not exist or is not visible to the owner."""
+
+
+class DependencyError(IngestionError):
+    """An external dependency prevented a safe operation."""

@@ -170,7 +170,10 @@ Deferred until a concrete caller exists. The future adapter must reuse the singl
 
 Deferred because no concrete downstream compatibility requirement exists. No normalizer is included in the current slice.
 
-## Phase 14 — Integration testing
+## Phase 14 — Integration testing — Complete
+
+**Status:** Complete for the current MVP slice. Isolated Docker Compose topology,
+deterministic focused tests, owner-scoped retrieval, and recovery seams are documented.
 
 **Objective:** Verify the system across real boundaries.
 
@@ -182,7 +185,11 @@ Deferred because no concrete downstream compatibility requirement exists. No nor
 
 **Acceptance criteria:** CI or documented local execution proves the end-to-end happy path and failure paths without requiring production credentials.
 
-## Phase 15 — Error handling and recovery
+## Phase 15 — Error handling and recovery — Complete
+
+**Status:** Complete for the current MVP slice. Correlation-aware error envelopes,
+safe operational logging, conservative reconciliation, bounded recovery contracts,
+metrics, and the recovery runbook are implemented.
 
 **Objective:** Make failures diagnosable and recoverable.
 

@@ -35,6 +35,9 @@ class ProcessingJobRepository(ABC):
     async def get(self, job_id: UUID) -> ProcessingJob | None: ...
 
     @abstractmethod
+    async def get_by_document(self, document_id: UUID) -> ProcessingJob | None: ...
+
+    @abstractmethod
     async def update(self, job: ProcessingJob) -> ProcessingJob: ...
 
 

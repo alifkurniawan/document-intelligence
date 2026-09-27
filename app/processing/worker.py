@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from app.domain.models import JobStatus, ProcessingJob
 from app.processing.contracts import PermanentProcessingError, RetryableProcessingError, retry_delay
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,14 +29,18 @@ def decide_delivery(
 ) -> DeliveryDecision:
     active = job.transition_to(JobStatus.PROCESSING) if job.status == JobStatus.QUEUED else job
     if error is None:
-        return DeliveryDecision("ack", active.transition_to(JobStatus.COMPLETED))
+        decision = DeliveryDecision("ack", active.transition_to(JobStatus.COMPLETED))
+        logger.info("processing job completed", extra={"job_id": str(job.job_id)})
+        return decision
     failed = active.transition_to(JobStatus.FAILED, error=str(error))
     if isinstance(error, PermanentProcessingError):
+        logger.warning("processing job dead-lettered", extra={"job_id": str(job.job_id)})
         return DeliveryDecision("dead_letter", failed, error=str(error))
     if not isinstance(error, RetryableProcessingError) or job.retry_count >= max_retries:
+        logger.warning("processing job retry exhausted", extra={"job_id": str(job.job_id)})
         return DeliveryDecision("dead_letter", failed, error=str(error))
     queued = failed.transition_to(JobStatus.QUEUED)
-    return DeliveryDecision(
+    decision = DeliveryDecision(
         "retry",
         queued,
         retry_delay(
@@ -41,6 +48,8 @@ def decide_delivery(
         ),
         error=str(error),
     )
+    logger.info("processing job scheduled for retry", extra={"job_id": str(job.job_id)})
+    return decision
 
 
 __all__ = ["DeliveryDecision", "decide_delivery"]

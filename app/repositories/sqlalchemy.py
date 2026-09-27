@@ -177,6 +177,14 @@ class SqlAlchemyProcessingJobRepository(ProcessingJobRepository):
         model = await self.session.get(ProcessingJobModel, job_id)
         return _job_entity(model) if model is not None else None
 
+    async def get_by_document(self, document_id: UUID) -> ProcessingJob | None:
+        model = await self.session.scalar(
+            select(ProcessingJobModel)
+            .where(ProcessingJobModel.document_id == document_id)
+            .order_by(ProcessingJobModel.created_at.desc())
+        )
+        return _job_entity(model) if model is not None else None
+
     async def update(self, job: ProcessingJob) -> ProcessingJob:
         model = await self.session.get(ProcessingJobModel, job.job_id)
         if model is None:

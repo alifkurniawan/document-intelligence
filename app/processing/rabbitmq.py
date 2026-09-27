@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import aio_pika
 
 from app.config import Settings
 from app.processing.contracts import MessagePublisher, ProcessingMessage
+
+logger = logging.getLogger(__name__)
 
 
 class RabbitMQPublisher(MessagePublisher):
@@ -50,6 +53,7 @@ class RabbitMQPublisher(MessagePublisher):
             ),
             routing_key=routing_key,
         )
+        logger.info("processing message published", extra={"job_id": str(message.job_id)})
 
     async def close(self) -> None:
         if self._connection is not None:
@@ -80,8 +84,12 @@ class OutboxDispatcher:
                     )
                 except Exception:
                     await unit_of_work.outbox.mark_attempted(row.outbox_id)
+                    logger.exception(
+                        "outbox publication failed", extra={"outbox_id": str(row.outbox_id)}
+                    )
                     continue
                 await unit_of_work.outbox.mark_published(row.outbox_id)
+                logger.info("outbox marked published", extra={"outbox_id": str(row.outbox_id)})
                 published += 1
             await unit_of_work.commit()
         return published
