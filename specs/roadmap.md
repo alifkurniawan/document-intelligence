@@ -26,7 +26,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** No secrets or connection strings are hard-coded; missing required production settings fail clearly.
 
-## Phase 3 — Database setup
+## Phase 3 — Database setup — Complete
 
 **Objective:** Make metadata persistence reproducible.
 
@@ -38,7 +38,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** A clean database can be migrated up and application sessions can be opened and closed safely.
 
-## Phase 4 — Domain model
+## Phase 4 — Domain model — Complete
 
 **Objective:** Define provider-neutral ingestion concepts.
 
@@ -50,7 +50,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** Domain tests cover ownership, immutable original semantics, valid states, and invalid transitions without importing Firebase or SQLAlchemy.
 
-## Phase 5 — Repository layer
+## Phase 5 — Repository layer — Complete
 
 **Objective:** Persist documents, artifacts, and jobs behind stable interfaces.
 

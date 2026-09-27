@@ -9,17 +9,23 @@ services:
       API_HOST: "${API_HOST:-0.0.0.0}"
       API_PORT: "${API_PORT:-8000}"
       MAX_UPLOAD_SIZE_BYTES: "${MAX_UPLOAD_SIZE_BYTES:-26214400}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://app:app@postgres:5432/app}"
+      DATABASE_POOL_SIZE: "${DATABASE_POOL_SIZE:-5}"
+      DATABASE_MAX_OVERFLOW: "${DATABASE_MAX_OVERFLOW:-10}"
+      DATABASE_POOL_TIMEOUT_SECONDS: "${DATABASE_POOL_TIMEOUT_SECONDS:-30}"
       ALLOWED_EXTENSIONS: "${ALLOWED_EXTENSIONS:-.pdf,.jpg,.jpeg,.png,.docx,.xlsx}"
       ALLOWED_MIME_TYPES: "${ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}"
-    profiles: [foundation]
+    profiles: [foundation, integration]
 
   postgres:
     image: postgres:17-alpine
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-app}"
       POSTGRES_USER: "${POSTGRES_USER:-app}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-app}"
-    profiles: [future]
+    profiles: [future, integration]
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
