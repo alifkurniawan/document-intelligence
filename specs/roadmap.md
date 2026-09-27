@@ -2,7 +2,7 @@
 
 The roadmap is intentionally incremental. Each phase should be independently reviewable and testable. The single-document workflow is the MVP core; batch/import is planned as an adapter that reuses it.
 
-## Phase 1 — Project foundation
+## Phase 1 — Project foundation — Complete
 
 **Objective:** Establish a runnable, maintainable Python service.
 
@@ -14,7 +14,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** Service starts from documented commands, health check works, and an empty baseline test suite runs.
 
-## Phase 2 — Configuration
+## Phase 2 — Configuration — Complete
 
 **Objective:** Centralize environment-driven settings.
 
