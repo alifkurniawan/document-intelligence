@@ -25,6 +25,22 @@ RabbitMQ configuration reserves three retries with exponential backoff, followed
 routing to the configured Dead Letter Queue. Publishing and consuming are implemented
 in later phases.
 
+## Database migrations and integration tests
+
+The database boundary uses async SQLAlchemy sessions and Alembic. Start the local
+PostgreSQL integration profile with Docker Compose:
+
+```shell
+docker compose --profile integration up -d postgres
+DATABASE_URL=postgresql://app:app@localhost:5432/app uv run alembic upgrade head
+INTEGRATION_DATABASE_URL=postgresql://app:app@localhost:5432/app uv run pytest tests/integration
+docker compose --profile integration down
+```
+
+The initial migration creates document, artifact, and processing-job metadata tables.
+It stores no binary document contents. Repository operations are async and owner-scoped;
+the registration service will create the initial processing job in a later phase.
+
 ## Quality checks
 
 ```shell
