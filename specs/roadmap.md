@@ -62,7 +62,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** Metadata can be created, queried by owner/document ID, and rolled back atomically in integration tests.
 
-## Phase 6 — File storage abstraction
+## Phase 6 — File storage abstraction — Complete (MVP)
 
 **Objective:** Preserve original binaries outside PostgreSQL.
 
@@ -74,7 +74,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** Originals are stored without overwrite, storage references are returned, and stored bytes can be verified by SHA-256.
 
-## Phase 7 — File validation
+## Phase 7 — File validation — Complete (MVP)
 
 **Objective:** Reject invalid inputs before acceptance.
 
@@ -86,7 +86,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** Supported valid files pass; mismatches, oversize, unreadable, corrupt, and unsupported files produce deterministic errors; no semantic extraction occurs.
 
-## Phase 8 — Document registration
+## Phase 8 — Document registration — Complete (MVP)
 
 **Objective:** Create a durable document/artifact/job model for an accepted input.
 
@@ -98,7 +98,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Acceptance criteria:** Successful registration has a unique document ID, complete original metadata, and no accepted record exists without a resolvable original.
 
-## Phase 9 — Single-document upload API
+## Phase 9 — Single-document upload API — Complete (MVP)
 
 **Objective:** Expose the first end-to-end ingestion workflow.
 
@@ -109,6 +109,10 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 **Dependencies:** Phases 2 and 8.
 
 **Acceptance criteria:** An authenticated user can upload one supported document and receive `document_id`, original metadata, uploader/time metadata, and queued status without downstream processing delay.
+
+Production hardening follow-ups remain for atomic Firebase non-overwrite semantics,
+Firebase SDK initialization, true streaming storage, stronger PDF integrity checks,
+and final error-schema alignment.
 
 ## Phase 10 — RabbitMQ integration
 

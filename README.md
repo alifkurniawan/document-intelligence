@@ -1,9 +1,10 @@
 # Legal Document Intelligence Platform
 
 Phase 2 adds typed, environment-driven configuration to the runnable service foundation.
-The service still exposes only an unauthenticated `GET /health` liveness endpoint;
-document ingestion, persistence, storage, authentication, messaging, and Document
-Understanding remain out of scope.
+The service exposes an unauthenticated `GET /health` liveness endpoint and an
+authenticated single-document upload endpoint. The upload workflow stores originals
+outside PostgreSQL, persists metadata, and returns a queued status; extraction and
+RabbitMQ publishing remain out of scope.
 
 ## Local development
 
@@ -23,7 +24,22 @@ variables or a local `.env` file. Supported environments are `development`, `tes
 
 RabbitMQ configuration reserves three retries with exponential backoff, followed by
 routing to the configured Dead Letter Queue. Publishing and consuming are implemented
-in later phases.
+in later phases. Local uploads use `STORAGE_BACKEND=filesystem` and write under
+`STORAGE_ROOT`; production requires Firebase Storage and Firebase email-auth tokens.
+
+## Single-document upload
+
+After configuring PostgreSQL, Firebase, and storage, upload a document with a Firebase
+ID token:
+
+```shell
+curl -X POST http://127.0.0.1:8000/documents \
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
+  -F "file=@contract.pdf"
+```
+
+Supported inputs are PDF, JPEG, PNG, DOCX, and XLSX, subject to the configured size,
+extension, and MIME allowlists. PostgreSQL stores metadata and storage references only.
 
 ## Database migrations and integration tests
 

@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     firebase_credentials_path: str | None = None
     firebase_storage_bucket: str | None = None
 
+    storage_backend: Literal["filesystem", "firebase"] = "filesystem"
+    storage_root: str = ".data/artifacts"
+
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, value: str) -> str:
@@ -136,6 +139,8 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "production configuration is missing required settings: " + ", ".join(missing)
                 )
+            if self.storage_backend != "firebase":
+                raise ValueError("production storage_backend must be 'firebase'")
         return self
 
 
