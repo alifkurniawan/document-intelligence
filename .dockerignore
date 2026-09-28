@@ -3,6 +3,7 @@
 !.env.example
 .git
 .gitignore
+google-service-account-key.json
 .pytest_cache
 .ruff_cache
 .venv

@@ -3,8 +3,8 @@ import logging
 import pytest
 from pydantic import ValidationError
 
-from app.config import Settings, get_settings
-from app.main import configure_logging
+from app.api.app import configure_logging
+from app.core.config import Settings, get_settings
 
 
 def test_defaults_are_safe_for_local_development() -> None:

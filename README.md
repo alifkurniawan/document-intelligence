@@ -15,7 +15,7 @@ Python 3.14 and [uv](https://docs.astral.sh/uv/) are required.
 ```shell
 uv sync --dev
 cp .env.example .env
-uv run uvicorn app.main:app --reload
+uv run uvicorn app.api.app:app --reload
 curl http://127.0.0.1:8000/health
 ```
 
@@ -27,10 +27,11 @@ variables or a local `.env` file. Supported environments are `development`, `tes
 RabbitMQ uses one durable processing queue, publisher confirms, three bounded
 exponential-backoff retries, and a durable Dead Letter Queue. Accepted uploads write a
 reference-only message to a transactional PostgreSQL outbox in the same transaction as
-the job; an outbox dispatcher publishes it and marks it published only after broker
+the job; the outbox worker publishes it and marks it published only after broker
 confirmation. Messages contain references, never file bytes. Local uploads use
 `STORAGE_BACKEND=filesystem` and write under `STORAGE_ROOT`; production requires
-Firebase Storage and Firebase email-auth tokens.
+Firebase Storage and Firebase email-auth tokens. The integration Compose profile
+mounts `google-service-account-key.json` read-only and initializes Firebase from it.
 
 ## Single-document upload
 
@@ -54,6 +55,7 @@ PostgreSQL integration profile with Docker Compose:
 ```shell
 docker compose --profile integration up -d postgres
 DATABASE_URL=postgresql://app:app@localhost:5432/app uv run alembic upgrade head
+docker compose --profile integration up -d --build
 INTEGRATION_DATABASE_URL=postgresql://app:app@localhost:5432/app uv run pytest tests/integration
 docker compose --profile integration down
 ```

@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from app.api.app import create_app
 
 
 def test_public_errors_have_a_correlation_id_and_safe_envelope():

@@ -1,6 +1,6 @@
 # API contract
 
-The API is served by `app.main:app`. Interactive OpenAPI documentation is available at
+The API is served by `app.api.app:app`. Interactive OpenAPI documentation is available at
 `/docs` when the service is running. All document routes require a Firebase ID token
 in `Authorization: Bearer <token>`.
 

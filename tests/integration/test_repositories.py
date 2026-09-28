@@ -14,10 +14,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.config import Settings
-from app.domain.models import Artifact, Document
-from app.infrastructure.database.session import create_engine
-from app.repositories.sqlalchemy import SqlAlchemyMetadataUnitOfWork
+from app.core.config import Settings
+from app.core.database import create_engine
+from app.models.entities import Artifact, Document
+from app.repositories.document import SqlAlchemyMetadataUnitOfWork
 
 DATABASE_URL = os.getenv("INTEGRATION_DATABASE_URL")
 pytestmark = pytest.mark.skipif(

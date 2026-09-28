@@ -1,9 +1,8 @@
-"""Provider-neutral asynchronous repository contracts and implementations."""
-
-from app.repositories.sqlalchemy import (
+from app.repositories.document import (
     SqlAlchemyArtifactRepository,
     SqlAlchemyDocumentRepository,
     SqlAlchemyMetadataUnitOfWork,
+    SqlAlchemyOutboxRepository,
     SqlAlchemyProcessingJobRepository,
 )
 
@@ -11,5 +10,6 @@ __all__ = [
     "SqlAlchemyArtifactRepository",
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyMetadataUnitOfWork",
+    "SqlAlchemyOutboxRepository",
     "SqlAlchemyProcessingJobRepository",
 ]

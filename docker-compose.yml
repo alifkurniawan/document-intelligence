@@ -13,9 +13,49 @@ services:
       DATABASE_POOL_SIZE: "${DATABASE_POOL_SIZE:-5}"
       DATABASE_MAX_OVERFLOW: "${DATABASE_MAX_OVERFLOW:-10}"
       DATABASE_POOL_TIMEOUT_SECONDS: "${DATABASE_POOL_TIMEOUT_SECONDS:-30}"
+      RABBITMQ_URL: "${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}"
+      RABBITMQ_EXCHANGE: "${RABBITMQ_EXCHANGE:-document-ingestion}"
+      RABBITMQ_QUEUE: "${RABBITMQ_QUEUE:-document-processing}"
+      RABBITMQ_ROUTING_KEY: "${RABBITMQ_ROUTING_KEY:-document.process}"
+      RABBITMQ_DLQ_EXCHANGE: "${RABBITMQ_DLQ_EXCHANGE:-document-ingestion-dlx}"
+      RABBITMQ_DLQ_QUEUE: "${RABBITMQ_DLQ_QUEUE:-document-processing-dlq}"
+      FIREBASE_PROJECT_ID: "${FIREBASE_PROJECT_ID:-}"
+      FIREBASE_CREDENTIALS_PATH: "${FIREBASE_CREDENTIALS_PATH:-/run/secrets/firebase-service-account.json}"
+      FIREBASE_STORAGE_BUCKET: "${FIREBASE_STORAGE_BUCKET:-}"
+      STORAGE_BACKEND: "${STORAGE_BACKEND:-filesystem}"
+      STORAGE_ROOT: "${STORAGE_ROOT:-/app/.data/artifacts}"
       ALLOWED_EXTENSIONS: "${ALLOWED_EXTENSIONS:-.pdf,.jpg,.jpeg,.png,.docx,.xlsx}"
       ALLOWED_MIME_TYPES: "${ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}"
+    volumes:
+      - "./google-service-account-key.json:/run/secrets/firebase-service-account.json:ro"
     profiles: [foundation, integration]
+
+  worker:
+    build: .
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.worker"]
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-development}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://app:app@postgres:5432/app}"
+      DATABASE_POOL_SIZE: "${DATABASE_POOL_SIZE:-5}"
+      DATABASE_MAX_OVERFLOW: "${DATABASE_MAX_OVERFLOW:-10}"
+      DATABASE_POOL_TIMEOUT_SECONDS: "${DATABASE_POOL_TIMEOUT_SECONDS:-30}"
+      RABBITMQ_URL: "${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}"
+      RABBITMQ_EXCHANGE: "${RABBITMQ_EXCHANGE:-document-ingestion}"
+      RABBITMQ_QUEUE: "${RABBITMQ_QUEUE:-document-processing}"
+      RABBITMQ_ROUTING_KEY: "${RABBITMQ_ROUTING_KEY:-document.process}"
+      RABBITMQ_DLQ_EXCHANGE: "${RABBITMQ_DLQ_EXCHANGE:-document-ingestion-dlx}"
+      RABBITMQ_DLQ_QUEUE: "${RABBITMQ_DLQ_QUEUE:-document-processing-dlq}"
+      RABBITMQ_PREFETCH_COUNT: "${RABBITMQ_PREFETCH_COUNT:-10}"
+      RABBITMQ_PUBLISH_TIMEOUT_SECONDS: "${RABBITMQ_PUBLISH_TIMEOUT_SECONDS:-10}"
+    volumes:
+      - "./google-service-account-key.json:/run/secrets/firebase-service-account.json:ro"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: [integration]
 
   postgres:
     image: postgres:17-alpine
@@ -25,6 +65,11 @@ services:
       POSTGRES_DB: "${POSTGRES_DB:-app}"
       POSTGRES_USER: "${POSTGRES_USER:-app}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-app}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     profiles: [future, integration]
 
   rabbitmq:
