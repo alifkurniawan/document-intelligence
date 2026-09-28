@@ -1,8 +1,13 @@
 import asyncio
 
-from app.config import Settings
-from app.infrastructure.database.models import ArtifactModel, DocumentModel, ProcessingJobModel
-from app.infrastructure.database.session import Base, create_engine
+from app.core.config import Settings
+from app.core.database import Base, create_engine
+from app.models.database import (
+    ArtifactModel,
+    DocumentModel,
+    DocumentRepresentationModel,
+    ProcessingJobModel,
+)
 
 
 def test_database_engine_is_async_and_does_not_connect_on_creation() -> None:
@@ -21,10 +26,13 @@ def test_database_engine_is_async_and_does_not_connect_on_creation() -> None:
 
 
 def test_metadata_contains_confirmed_tables_and_original_index() -> None:
-    assert {"documents", "artifacts", "processing_jobs"} <= set(Base.metadata.tables)
+    assert {"documents", "artifacts", "processing_jobs", "document_representations"} <= set(
+        Base.metadata.tables
+    )
     assert ArtifactModel.__table__.name == "artifacts"
     assert DocumentModel.__table__.name == "documents"
     assert ProcessingJobModel.__table__.name == "processing_jobs"
+    assert DocumentRepresentationModel.__table__.name == "document_representations"
     assert any(
         index.name == "uq_one_original_artifact_per_document"
         for index in ArtifactModel.__table__.indexes

@@ -74,6 +74,58 @@ The current backend uses Python 3.14, FastAPI, PostgreSQL, SQLAlchemy, Alembic, 
 
 **Constraints:** Store originals under unique document-scoped paths, prevent accidental overwrite, verify size/hash as part of acceptance, and keep the storage adapter replaceable. Local filesystem or another object store may be used in tests through the same interface.
 
+## Document Understanding processing
+
+Document Understanding is a subsequent asynchronous processing capability after
+Document Ingestion. Ingestion remains responsible for authentication and
+authorization, technical validation, document registration, immutable original
+storage, metadata, processing-job creation, and asynchronous hand-off. Understanding
+consumes the original by reference and must not modify or replace it.
+
+Processing follows these architectural stages:
+
+```text
+inspection -> processor selection -> content extraction -> OCR when required
+-> structure/layout -> Document Representation -> provenance -> semantic extraction
+```
+
+Processor selection is based on document characteristics and uses the simplest
+appropriate method. Text PDFs use text/PDF parsing where adequate; scanned PDFs and
+images may use OCR; DOCX uses a DOCX parser; and XLSX uses a spreadsheet parser.
+OCR is a first-class capability, with PaddleOCR as the preferred initial
+implementation. The processing boundary must remain replaceable and must not become
+dependent on PaddleOCR-specific details. VLM/LLM processing is optional and is not
+mandatory; it is introduced only for a concrete requirement that simpler or
+specialized processing cannot adequately address.
+
+Document Representation is a structured, machine-readable view of document content
+and observable structure. It may contain document information, pages, text blocks,
+headings, paragraphs, tables, images, reading order, layout, coordinates, and
+provenance. Structure and semantics remain distinct: structure records what exists,
+while semantic extraction identifies meaning such as people, organizations,
+addresses, dates, monetary amounts, property, clauses, obligations, and
+relationships. Semantic extraction operates on the representation, never on a
+mutable replacement of the original artifact.
+
+Original artifacts, intermediate data, and derived semantic data are distinct. OCR
+results, extracted text, page images, layout information, and parsed structure may
+be retained as intermediate outputs, but none may replace the original. Derived
+information should remain traceable to its source whenever practical, including
+applicable document/artifact version, page or block, bounding box, source text,
+processor/version, model/version, prompt version, extraction-logic version, and
+processing timestamp. The requirement is traceability, not a rigid field set for
+every processor.
+
+Processing results are version-aware where applicable and can be reprocessed from an
+existing immutable original when processing logic changes, without requiring a new
+upload. Processing status, transient failure handling, bounded retry, permanent
+failure reporting, and reprocessing remain compatible with the existing RabbitMQ
+hand-off and do not require a new workflow engine.
+
+Application services and processing components use Dependency Injection to remain
+testable and maintainable. Dependency Injection does not require speculative ports,
+adapters, factories, layers, or other abstractions beyond meaningful boundaries.
+
 ## Package architecture
 
 The current package structure follows this flow:
@@ -103,6 +155,13 @@ application services (ingestion, validation, recovery)
 * `app/schemas` owns API response models.
 
 The API process and outbox worker are separate runtimes of the same modular monolith, not separate domain services. Use interfaces only at meaningful external boundaries: authentication, repositories/unit of work, artifact storage, message publishing, and validation/inspection. Do not add speculative ports, event buses, or microservices.
+
+Adding Document Understanding does not change the modular-monolith decision. It does
+not introduce requirements for microservices, Clean Architecture, Hexagonal
+Architecture, CQRS, event sourcing, multi-agent systems, autonomous agents, or agent
+frameworks. Downstream intelligence such as RAG, vector search, question answering,
+comparison, legal analysis, Shariah analysis, risk analysis, and recommendations is
+outside this capability.
 
 ## Configuration and secrets
 

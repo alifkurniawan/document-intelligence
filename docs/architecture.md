@@ -9,7 +9,7 @@ HTTP/FastAPI -> registration service -> domain entities
                          |                 |
                  filesystem/Firebase  PostgreSQL metadata + outbox
                                                    |
-                                             outbox dispatcher
+                                             outbox worker
                                                    |
                                                 RabbitMQ
 ```
@@ -28,7 +28,7 @@ transactions. Storage, Firebase Authentication, and RabbitMQ are replaceable ada
    Storage. The adapter verifies size and SHA-256 and refuses overwrite.
 4. One document, original artifact, queued processing job, and reference-only outbox
    row are committed in one PostgreSQL unit of work.
-5. An outbox dispatcher publishes the job reference after the database commit and
+5. The outbox worker publishes the job reference after the database commit and
    marks the row published only after RabbitMQ publisher confirmation.
 6. Downstream processing reads the original by reference and owns processing state
    transitions after the queued hand-off.

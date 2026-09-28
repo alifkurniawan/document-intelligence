@@ -1,6 +1,6 @@
 import logging
 
-from app.main import configure_logging
+from app.api.app import configure_logging
 
 
 def test_logging_uses_safe_default(monkeypatch) -> None:

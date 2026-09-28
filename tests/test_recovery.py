@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.recovery import RecoveryCandidate, RecoveryService
+from app.services.recovery import RecoveryCandidate, RecoveryService
 
 
 class FakeRecoverySource:

@@ -222,3 +222,39 @@ metrics, and the recovery runbook are implemented.
 Implemented in `README.md` and `docs/`: API contract, architecture decisions,
 configuration, deployment/migration guidance, security notes, recovery operations,
 Document Understanding boundary, and release checklist.
+
+## Phase 17 — Document Understanding — Complete
+
+**Objective:** Transform immutable original document artifacts into a structured,
+machine-readable Document Representation and traceable semantic information.
+
+**Scope:** Document inspection, processor selection by document characteristics,
+content extraction, OCR when required, structure/layout and reading-order analysis,
+Document Representation, provenance, version-aware processing, semantic extraction,
+processing status, retry, failure reporting, and reprocessing from an existing
+original artifact.
+
+The initial processor policy uses the simplest appropriate method: text parsing for
+text PDFs, OCR for scanned PDFs and images, DOCX parsing for DOCX, and spreadsheet
+parsing for XLSX. OCR is a first-class capability and PaddleOCR is the preferred
+initial implementation. The architecture must keep the OCR engine replaceable and
+must not require OCR, VLM, or LLM processing for every document.
+
+**Dependencies:** Phases 10–11 and the immutable original-artifact contract.
+
+**Acceptance criteria:** A future implementation can consume a persisted original by
+reference, select an appropriate processor, produce a representation containing
+content and observable structure, retain practical source provenance, associate
+results with applicable processor/model/prompt/logic versions and timestamps, and
+retry or reprocess without a new upload. The original artifact remains immutable.
+
+**Non-goals:** RAG, vector search, question answering, document comparison, legal
+reasoning or analysis, Shariah analysis, legal risk analysis, recommendations, and
+autonomous agents. Detailed representation schemas, processor contracts, and
+semantic extraction taxonomies belong to a future feature specification.
+
+Implemented with characteristic-driven processor selection, immutable original
+artifact access, versioned document representations, provenance, semantic
+extraction, bounded retry, failure reporting, and reprocessing from an existing
+original artifact. Supported PDF, image/OCR, DOCX, and XLSX paths remain behind
+replaceable processing boundaries.

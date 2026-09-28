@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.domain.errors import DomainError, InvalidStateTransition, OriginalArtifactError
-from app.domain.models import Artifact, Document, DocumentStatus, JobStatus, ProcessingJob
+from app.core.errors import DomainError, InvalidStateTransition, OriginalArtifactError
+from app.models.entities import Artifact, Document, DocumentStatus, JobStatus, ProcessingJob
 
 
 def test_document_lifecycle_and_original_artifact_are_provider_neutral() -> None:
