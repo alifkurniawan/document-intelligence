@@ -6,7 +6,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Establish a runnable, maintainable Python service.
 
-**Scope:** Application package layout, FastAPI entry point, dependency management, health endpoint, baseline logging, test layout, and CI-quality commands.
+**Scope:** Layered application package layout (`api`, `core`, `models`, `services`, `repositories`, `storage`, `workers`, and `schemas`), FastAPI entry point, dependency management, health endpoint, baseline logging, test layout, and CI-quality commands.
 
 **Deliverables:** Minimal service, `pyproject.toml` configuration, test harness, README development commands.
 
@@ -20,7 +20,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Scope:** Typed settings, `.env.example`, environment validation, limits, allowlists, Firebase, PostgreSQL, RabbitMQ, and storage settings.
 
-**Deliverables:** Settings module and configuration documentation.
+**Deliverables:** `app/core/config.py`, `.env.example`, and configuration documentation.
 
 **Dependencies:** Phase 1.
 
@@ -30,7 +30,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Make metadata persistence reproducible.
 
-**Scope:** PostgreSQL connection/session management, SQLAlchemy base, Alembic, initial migration wiring.
+**Scope:** PostgreSQL connection/session management in `app/core/database.py`, SQLAlchemy base and models in `app/models/database.py`, Alembic, and initial migration wiring.
 
 **Deliverables:** Migration commands and database integration tests.
 
@@ -42,9 +42,9 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Define provider-neutral ingestion concepts.
 
-**Scope:** Document, Artifact, ProcessingJob, authenticated owner, processing states, invariants, and domain errors.
+**Scope:** Provider-neutral Document, Artifact, ProcessingJob, OutboxMessage, authenticated-owner concepts, processing states, invariants, and shared errors in `app/models/entities.py` and `app/core/errors.py`.
 
-**Deliverables:** Domain types and unit tests.
+**Deliverables:** Provider-neutral model entities and unit tests.
 
 **Dependencies:** Phase 1; database vocabulary from Phase 3.
 
@@ -54,7 +54,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Persist documents, artifacts, and jobs behind stable interfaces.
 
-**Scope:** Repository contracts, SQLAlchemy implementations, constraints, indexes, and transaction boundaries.
+**Scope:** SQLAlchemy repository implementations in `app/repositories/document.py`, constraints, indexes, and the metadata unit-of-work transaction boundary.
 
 **Deliverables:** Repositories and migration updates.
 
@@ -66,7 +66,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Preserve original binaries outside PostgreSQL.
 
-**Scope:** Artifact storage port, Firebase Storage adapter, test/local adapter, immutable document-scoped paths, streaming upload, hash/size verification.
+**Scope:** Artifact storage protocol, Firebase Storage adapter, in-memory/filesystem test adapters, immutable document-scoped paths, and hash/size verification.
 
 **Deliverables:** Storage interface and adapter tests.
 
@@ -90,7 +90,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Create a durable document/artifact/job model for an accepted input.
 
-**Scope:** Registration application service, ownership, metadata, original-artifact record, and queued processing state.
+**Scope:** `DocumentIngestionService`, ownership, metadata, original-artifact record, queued processing state, and transactional outbox record.
 
 **Deliverables:** Service orchestration and transaction tests.
 
@@ -118,7 +118,7 @@ and final error-schema alignment.
 
 **Objective:** Publish durable processing job references.
 
-**Scope:** Exchange/queue topology, publisher adapter, message schema containing `document_id` and `job_id`, publisher confirms, and configuration.
+**Scope:** Exchange/queue topology, `app/workers/rabbitmq.py` publisher adapter, reference-only processing message contract, publisher confirms, and configuration.
 
 **Deliverables:** RabbitMQ adapter and contract tests.
 
@@ -126,7 +126,10 @@ and final error-schema alignment.
 
 **Acceptance criteria:** No binary data appears in messages; messages are traceable to a persisted job and use documented delivery settings.
 
-Implemented with durable exchange/queue/DLQ declarations, publisher confirms, reference-only messages, environment-backed settings, and a transactional outbox.
+Implemented with durable exchange/queue/DLQ declarations, publisher confirms, reference-only
+messages, environment-backed settings, a transactional outbox, and the runnable
+`app.workers.worker` outbox publisher. The downstream processing consumer remains an
+external boundary.
 
 ## Phase 11 — Asynchronous processing hand-off — Complete
 
@@ -140,7 +143,10 @@ Implemented with durable exchange/queue/DLQ declarations, publisher confirms, re
 
 **Acceptance criteria:** Upload returns before processing completion; transient failures can retry; permanent failures are visible and do not silently lose the original.
 
-Implemented with provider-neutral processing contracts, legal job transitions, bounded exponential retry policy, and dead-letter decisions.
+Implemented with provider-neutral processing contracts in `app/workers/contracts.py`, legal
+job transitions, bounded exponential retry policy, dead-letter decisions, and a runnable
+outbox hand-off worker.
+Actual Document Understanding consumption remains downstream and is not part of ingestion.
 
 ## Phase 12 — Batch/import adapter — Deferred
 

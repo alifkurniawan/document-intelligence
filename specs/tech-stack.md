@@ -2,7 +2,7 @@
 
 ## Baseline
 
-The initial implementation uses Python 3.14, FastAPI, PostgreSQL, SQLAlchemy, Alembic, RabbitMQ, Firebase Authentication, and Firebase Storage. These are infrastructure choices behind application interfaces where replacement is practical; they are not domain concepts.
+The current backend uses Python 3.14, FastAPI, PostgreSQL, SQLAlchemy, Alembic, RabbitMQ, Firebase Authentication, and Firebase Storage. The implementation is a modular monolith: `app/api` exposes the HTTP boundary, `app/services` orchestrates use cases, `app/models` contains entities and persistence models, `app/repositories` handles metadata persistence, `app/storage` handles binary artifacts, and `app/workers` handles asynchronous publication. Infrastructure choices remain behind interfaces where replacement is practical; they are not domain concepts.
 
 ## Python 3.14
 
@@ -74,17 +74,35 @@ The initial implementation uses Python 3.14, FastAPI, PostgreSQL, SQLAlchemy, Al
 
 **Constraints:** Store originals under unique document-scoped paths, prevent accidental overwrite, verify size/hash as part of acceptance, and keep the storage adapter replaceable. Local filesystem or another object store may be used in tests through the same interface.
 
-## Repository / Service architecture
+## Package architecture
 
-The module structure follows `API -> application/service -> domain -> repository/infrastructure`.
+The current package structure follows this flow:
 
-* API owns HTTP concerns and authenticated request context.
-* Application services orchestrate validation, transaction boundaries, artifact storage, registration, and job creation.
-* Domain owns document, artifact, processing-state concepts and invariants without provider imports.
-* Repositories hide PostgreSQL access.
-* Infrastructure implements database sessions, Firebase adapters, RabbitMQ publishers, and format-specific technical inspection.
+```text
+API routes/schemas + auth
+          |
+          v
+application services (ingestion, validation, recovery)
+          |
+          +--> models/entities ---------> repositories -> PostgreSQL metadata/outbox
+          |
+          +--> storage/artifacts --------> filesystem or Firebase Storage
+          |
+          +--> workers/contracts --------> RabbitMQ publisher -> downstream consumer
+          |
+          +--> core/config, database, observability, provider initialization
+```
 
-Use interfaces only at meaningful external boundaries: repositories, artifact storage, authentication, message publishing, and file validation/inspection. Do not add speculative ports, event buses, or microservices.
+* `app/api` owns FastAPI bootstrap, routes, authentication context, and HTTP mapping.
+* `app/core` owns settings, database setup, Firebase initialization, observability, and shared errors.
+* `app/models` owns provider-neutral entities plus SQLAlchemy database models.
+* `app/services` owns validation, ingestion orchestration, and recovery workflows.
+* `app/repositories` owns SQLAlchemy repositories and `SqlAlchemyMetadataUnitOfWork`.
+* `app/storage` owns the artifact-storage protocol and filesystem/Firebase adapters.
+* `app/workers` owns processing contracts, RabbitMQ integration, outbox dispatch, and worker runtime.
+* `app/schemas` owns API response models.
+
+The API process and outbox worker are separate runtimes of the same modular monolith, not separate domain services. Use interfaces only at meaningful external boundaries: authentication, repositories/unit of work, artifact storage, message publishing, and validation/inspection. Do not add speculative ports, event buses, or microservices.
 
 ## Configuration and secrets
 

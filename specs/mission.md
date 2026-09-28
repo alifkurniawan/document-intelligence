@@ -10,7 +10,7 @@ External documents need a consistent entry point into the platform with clear ow
 
 ## System purpose and scope
 
-The system is a pragmatic modular monolith for Document Ingestion. It supports a core ingestion service that can be called by web upload, batch-upload, and import adapters. The core workflow is:
+The system is a pragmatic modular monolith for Document Ingestion. The current backend is organized into an HTTP/API layer, shared core configuration and infrastructure helpers, provider-neutral models, application services, persistence repositories, artifact storage adapters, and background workers. Web upload, batch-upload, and import adapters are entry points to the same core ingestion service. The core workflow is:
 
 1. Authenticate and authorize the user.
 2. Accept and validate the input.
@@ -46,13 +46,28 @@ The lifecycle is `received -> validating -> registered/stored -> queued`, follow
 
 The single-document upload workflow is the first MVP path. Batch and import are adapters that invoke the same core service rather than separate business workflows.
 
+## Current module boundaries
+
+The Python package is intentionally split by responsibility:
+
+* `app/api` owns FastAPI bootstrap, routes, authentication integration, and HTTP error mapping.
+* `app/core` owns settings, database engine/session setup, Firebase initialization, observability, and shared errors.
+* `app/models` owns provider-neutral entities and SQLAlchemy persistence models.
+* `app/services` owns validation, ingestion orchestration, and recovery workflows.
+* `app/repositories` owns database repository implementations and the metadata unit of work.
+* `app/storage` owns artifact-storage ports and filesystem/Firebase implementations.
+* `app/workers` owns processing contracts, RabbitMQ publishing, outbox dispatch, and worker runtime.
+* `app/schemas` owns API request/response models.
+
+These are package boundaries inside one deployable backend, not separate services. The API process and outbox worker use the same application package and database contracts.
+
 ## Core engineering principles
 
 1. Preserve provenance: the original artifact is immutable source of truth.
 2. Keep ingestion separate from understanding.
 3. Make long-running work asynchronous; upload responses do not wait for processing.
 4. Prefer a simple, modular, testable monolith over premature microservices.
-5. Isolate domain/application logic from PostgreSQL, RabbitMQ, Firebase, and storage providers where practical.
+5. Isolate provider-specific code behind the API, repository, storage, authentication, and worker boundaries where practical.
 6. Keep abstractions proportional to current requirements; document architecture decisions.
 7. Load credentials, connection strings, and configuration from environment variables; never hard-code secrets.
 8. Validate type, extension, size, readability/integrity, and appropriate basic format properties before acceptance.
