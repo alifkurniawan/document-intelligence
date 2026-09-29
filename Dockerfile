@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir uv \
     && uv sync --frozen --no-dev --no-install-project
 
 COPY app ./app
+COPY src ./src
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 
