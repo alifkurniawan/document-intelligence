@@ -13,6 +13,7 @@ token in `Authorization: Bearer <token>`; Firebase ID tokens are used only at ex
 | POST | `/auth/refresh` | Rotate a refresh session and issue new tokens | Access and refresh tokens |
 | POST | `/auth/logout` | Revoke a refresh session | `204` |
 | POST | `/documents` | Register one authenticated original | `200 DocumentUploadResponse` |
+| GET | `/documents` | List the authenticated user's documents | `200 DocumentUploadResponse[]` |
 | GET | `/documents/{document_id}` | Read owner-scoped metadata and job status | `200 DocumentUploadResponse` |
 | GET | `/documents/{document_id}/original` | Stream the owner-scoped immutable original | `200` with the stored MIME type |
 

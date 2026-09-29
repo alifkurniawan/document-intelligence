@@ -154,9 +154,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return application.state.authentication_service
 
     def get_unit_of_work_factory():
-        if configured.database_url is None:
-            return None
-        return get_registration_service().unit_of_work_factory
+        service = get_registration_service()
+        return service.unit_of_work_factory if service is not None else None
 
     application.include_router(
         create_document_router(

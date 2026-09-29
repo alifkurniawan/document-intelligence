@@ -112,6 +112,11 @@ The lifecycle is `received -> validating -> registered/stored -> queued`, follow
 
 The single-document upload workflow is the first MVP path. Batch and import are adapters that invoke the same core service rather than separate business workflows.
 
+Authenticated users may list their own registered documents through the API. Listing
+is owner-scoped, returns newest documents first, and exposes metadata and processing
+status without returning original bytes. It must not reveal documents belonging to
+another account.
+
 ## Current module boundaries
 
 The Python package is intentionally split by responsibility:
@@ -150,6 +155,7 @@ These are package boundaries inside one deployable backend, not separate service
 * RabbitMQ contains job references, not document binaries.
 * A processing job is created only after the document and original-artifact metadata can be durably resolved.
 * A user can operate only on documents allowed for that account; the initial authorization model is account ownership.
+* Document listings are owner-scoped and never disclose another account's documents.
 * Downstream processing can be retried from the original artifact.
 * Document Understanding processing has observable status and supports retry, permanent failure reporting, and reprocessing.
 * Intermediate processing data and derived semantic data never replace the original artifact.

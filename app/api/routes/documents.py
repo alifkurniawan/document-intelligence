@@ -45,6 +45,42 @@ def create_document_router(
 ) -> APIRouter:
     router = APIRouter()
 
+    @router.get(
+        "/documents",
+        response_model=list[DocumentUploadResponse],
+        responses={code: {"model": ErrorResponse} for code in (401, 503)},
+        summary="List the authenticated user's documents",
+    )
+    async def list_documents(
+        current_user: Annotated[AuthenticatedOwner, Depends(get_current_user)],
+        uow_factory=Depends(get_uow_factory),
+    ) -> list[DocumentUploadResponse]:
+        if uow_factory is None:
+            raise HTTPException(
+                503,
+                {"code": "dependency_unavailable", "detail": "document database is not configured"},
+            )
+        try:
+            async with uow_factory() as unit_of_work:
+                documents = await unit_of_work.documents.list(owner_id=current_user.owner_id)
+                responses = []
+                for document in documents:
+                    if document.original_artifact_id is None:
+                        continue
+                    artifact = await unit_of_work.artifacts.get(document.original_artifact_id)
+                    job = await unit_of_work.jobs.get_by_document(document.document_id)
+                    if artifact is not None and job is not None:
+                        responses.append(_response(document, artifact, job))
+                return responses
+        except AuthenticationError as exc:
+            raise HTTPException(
+                401, {"code": "authentication_failed", "detail": "authentication failed"}
+            ) from exc
+        except DependencyError as exc:
+            raise HTTPException(
+                503, {"code": "dependency_unavailable", "detail": str(exc)}
+            ) from exc
+
     @router.post(
         "/documents",
         response_model=DocumentUploadResponse,

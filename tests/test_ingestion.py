@@ -24,6 +24,9 @@ class MemoryRepository:
         self.values.append(value)
         return value
 
+    async def list(self, *, owner_id: str):
+        return [value for value in self.values if getattr(value, "owner_id", None) == owner_id]
+
 
 class MemoryUnitOfWork:
     def __init__(self, state):
@@ -201,3 +204,28 @@ def test_upload_reports_unconfigured_database_dependency() -> None:
 
     assert response.status_code == 503
     assert response.json()["code"] == "dependency_unavailable"
+
+
+def test_list_documents_requires_authentication() -> None:
+    with TestClient(configured_app()) as client:
+        response = client.get("/documents")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "authentication_required"
+
+
+def test_list_documents_returns_owner_scoped_collection() -> None:
+    application = configured_app()
+    settings = application.state.settings
+    state = (MemoryRepository(), MemoryRepository(), MemoryRepository())
+    application.state.registration_service = DocumentRegistrationService(
+        validator=FileValidator(settings),
+        storage=InMemoryArtifactStorage(),
+        unit_of_work_factory=lambda: MemoryUnitOfWork(state),
+    )
+
+    with TestClient(application) as client:
+        response = client.get("/documents", headers={"Authorization": "Bearer test-token"})
+
+    assert response.status_code == 200
+    assert response.json() == []

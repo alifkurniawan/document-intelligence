@@ -65,6 +65,9 @@ async def _run_repository_round_trip() -> None:
             loaded = await unit_of_work.documents.get(document.document_id, owner_id="account-1")
             assert loaded is not None
             assert loaded.original_artifact_id == artifact.artifact_id
+            listed = await unit_of_work.documents.list(owner_id="account-1")
+            assert [item.document_id for item in listed] == [document.document_id]
+            assert await unit_of_work.documents.list(owner_id="other") == []
 
         with pytest.raises(RuntimeError, match="rollback sentinel"):
             async with SqlAlchemyMetadataUnitOfWork(session_factory) as unit_of_work:

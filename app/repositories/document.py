@@ -115,6 +115,26 @@ class SqlAlchemyDocumentRepository:
         )
         return _document_entity(model, original_artifact_id)
 
+    async def list(self, *, owner_id: str) -> list[Document]:
+        """Return documents visible to one owner, newest first."""
+        models = (
+            await self.session.scalars(
+                select(DocumentModel)
+                .where(DocumentModel.owner_id == owner_id)
+                .order_by(DocumentModel.created_at.desc())
+            )
+        ).all()
+        documents = []
+        for model in models:
+            original_artifact_id = await self.session.scalar(
+                select(ArtifactModel.artifact_id).where(
+                    ArtifactModel.document_id == model.document_id,
+                    ArtifactModel.role == ArtifactRole.ORIGINAL.value,
+                )
+            )
+            documents.append(_document_entity(model, original_artifact_id))
+        return documents
+
 
 class SqlAlchemyArtifactRepository:
     def __init__(self, session: AsyncSession) -> None:
