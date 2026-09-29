@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     firebase_credentials_path: str | None = None
     firebase_storage_bucket: str | None = None
 
+    jwt_signing_key: SecretStr | None = None
+    auth_issuer: str = "legal-document-intelligence-platform"
+    auth_audience: str = "legal-document-intelligence-platform-api"
+    access_token_expire_seconds: int = Field(default=900, gt=0)
+    refresh_token_expire_seconds: int = Field(default=30 * 24 * 60 * 60, gt=0)
+
     storage_backend: Literal["filesystem", "firebase"] = "filesystem"
     storage_root: str = ".data/artifacts"
 
@@ -143,6 +149,10 @@ class Settings(BaseSettings):
                 )
             if self.storage_backend != "firebase":
                 raise ValueError("production storage_backend must be 'firebase'")
+            if not self.jwt_signing_key:
+                raise ValueError(
+                    "production configuration is missing required settings: JWT_SIGNING_KEY"
+                )
         return self
 
 

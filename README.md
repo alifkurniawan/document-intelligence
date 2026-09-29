@@ -30,17 +30,19 @@ reference-only message to a transactional PostgreSQL outbox in the same transact
 the job; the outbox worker publishes it and marks it published only after broker
 confirmation. Messages contain references, never file bytes. Local uploads use
 `STORAGE_BACKEND=filesystem` and write under `STORAGE_ROOT`; production requires
-Firebase Storage and Firebase email-auth tokens. The integration Compose profile
-mounts `google-service-account-key.json` read-only and initializes Firebase from it.
+Firebase Storage and Firebase email-auth tokens. Firebase ID tokens must first be
+exchanged at `/auth/token` for application access and refresh tokens. Firebase Admin
+credentials are supplied through `FIREBASE_CREDENTIALS_PATH` and are not stored in the
+repository.
 
 ## Single-document upload
 
-After configuring PostgreSQL, Firebase, and storage, upload a document with a Firebase
-ID token:
+After configuring PostgreSQL, Firebase, and storage, exchange a Firebase ID token and
+upload a document with the resulting application access token:
 
 ```shell
 curl -X POST http://127.0.0.1:8000/documents \
-  -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -F "file=@contract.pdf"
 ```
 

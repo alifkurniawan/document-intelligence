@@ -18,6 +18,8 @@ from app.models.database import (  # noqa: F401
     DocumentRepresentationModel,
     OutboxMessageModel,
     ProcessingJobModel,
+    RefreshTokenModel,
+    UserModel,
 )
 
 config = context.config

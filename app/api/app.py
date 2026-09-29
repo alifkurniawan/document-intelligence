@@ -10,7 +10,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.api.auth import FirebaseAuthVerifier, TokenVerifier
+from app.api.auth import AuthenticatedOwner, TokenVerifier
+from app.api.routes.authentication import create_auth_router
 from app.api.routes.documents import create_document_router
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine
@@ -22,6 +23,7 @@ from app.core.observability import (
     set_correlation_id,
 )
 from app.repositories.document import SqlAlchemyMetadataUnitOfWork
+from app.services.authentication import ApplicationTokenService, AuthenticationService
 from app.services.document_ingestion import DocumentIngestionService
 from app.services.validation import FileValidator
 
@@ -48,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.settings = configured
     application.state.registration_service = None
     application.state.token_verifier = None
+    application.state.authentication_service = None
 
     @application.middleware("http")
     async def correlation_middleware(request: Request, call_next):
@@ -131,8 +134,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def get_token_verifier() -> TokenVerifier:
         if application.state.token_verifier is None:
-            application.state.token_verifier = FirebaseAuthVerifier(configured)
+            token_service = ApplicationTokenService(configured)
+
+            class ApplicationAccessTokenVerifier:
+                async def verify(self, token: str) -> AuthenticatedOwner:
+                    user_id, firebase_uid = token_service.verify_access_token(token)
+                    return AuthenticatedOwner(owner_id=str(user_id), firebase_uid=firebase_uid)
+
+            application.state.token_verifier = ApplicationAccessTokenVerifier()
         return application.state.token_verifier
+
+    def get_authentication_service() -> AuthenticationService | None:
+        if application.state.authentication_service is None and configured.database_url is not None:
+            engine = create_engine(configured)
+            factory = async_sessionmaker(engine, expire_on_commit=False)
+            application.state.authentication_service = AuthenticationService(factory, configured)
+        if application.state.authentication_service is not None:
+            get_token_verifier()
+        return application.state.authentication_service
 
     def get_unit_of_work_factory():
         if configured.database_url is None:
@@ -146,6 +165,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             get_uow_factory=get_unit_of_work_factory,
         )
     )
+    application.include_router(
+        create_auth_router(
+            get_auth_service=get_authentication_service, get_settings=lambda: configured
+        )
+    )
+    get_token_verifier()
 
     return application
 

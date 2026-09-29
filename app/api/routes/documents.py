@@ -6,10 +6,10 @@ from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app.api.auth import TokenVerifier
+from app.api.auth import AuthenticatedOwner, get_current_user
 from app.core.ingestion_errors import (
     AuthenticationError,
     DependencyError,
@@ -45,11 +45,6 @@ def create_document_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    async def owner_from_header(authorization: str | None, token_verifier: TokenVerifier):
-        if not authorization or not authorization.lower().startswith("bearer "):
-            raise AuthenticationError("Bearer token is required")
-        return (await token_verifier.verify(authorization[7:].strip())).owner_id
-
     @router.post(
         "/documents",
         response_model=DocumentUploadResponse,
@@ -58,20 +53,14 @@ def create_document_router(
     )
     async def upload_document(
         file: Annotated[UploadFile, File(description="PDF, image, DOCX, or XLSX document")],
-        authorization: Annotated[str | None, Header()] = None,
+        current_user: Annotated[AuthenticatedOwner, Depends(get_current_user)],
         service=Depends(get_registration_service),
-        token_verifier: TokenVerifier = Depends(get_token_verifier),
     ) -> DocumentUploadResponse:
-        if not authorization or not authorization.lower().startswith("bearer "):
-            raise HTTPException(
-                401, {"code": "authentication_required", "detail": "Bearer token is required"}
-            )
         try:
-            owner = await token_verifier.verify(authorization[7:].strip())
             if service is None:
                 raise DependencyError("document registration is not configured")
             result = await service.register(
-                owner_id=owner.owner_id,
+                owner_id=current_user.owner_id,
                 filename=file.filename,
                 client_mime=file.content_type,
                 source=file.file,
@@ -96,12 +85,11 @@ def create_document_router(
     @router.get("/documents/{document_id}", response_model=DocumentUploadResponse)
     async def get_document(
         document_id: str,
-        authorization: Annotated[str | None, Header()] = None,
+        current_user: Annotated[AuthenticatedOwner, Depends(get_current_user)],
         uow_factory=Depends(get_uow_factory),
-        token_verifier: TokenVerifier = Depends(get_token_verifier),
     ) -> DocumentUploadResponse:
         try:
-            owner_id = await owner_from_header(authorization, token_verifier)
+            owner_id = current_user.owner_id
             parsed_document_id = UUID(document_id)
             if uow_factory is None:
                 raise DependencyError("document database is not configured")
@@ -126,13 +114,12 @@ def create_document_router(
     @router.get("/documents/{document_id}/original")
     async def get_original(
         document_id: str,
-        authorization: Annotated[str | None, Header()] = None,
+        current_user: Annotated[AuthenticatedOwner, Depends(get_current_user)],
         uow_factory=Depends(get_uow_factory),
         service=Depends(get_registration_service),
-        token_verifier: TokenVerifier = Depends(get_token_verifier),
     ):
         try:
-            owner_id = await owner_from_header(authorization, token_verifier)
+            owner_id = current_user.owner_id
             parsed_document_id = UUID(document_id)
             if uow_factory is None or service is None:
                 raise DependencyError("document storage is not configured")

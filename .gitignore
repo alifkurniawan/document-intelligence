@@ -5,3 +5,5 @@ __pycache__/
 .env
 .env.*
 *.pyc
+.DS_Store
+google-service-account-key.json

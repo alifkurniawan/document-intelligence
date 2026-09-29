@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Annotated, Protocol
+from uuid import UUID
 
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth
 
 from app.core.config import Settings
@@ -16,6 +19,14 @@ from app.core.ingestion_errors import AuthenticationError
 @dataclass(frozen=True, slots=True)
 class AuthenticatedOwner:
     owner_id: str
+    firebase_uid: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FirebaseIdentity:
+    uid: str
+    email: str | None
+    email_verified: bool
 
 
 class TokenVerifier(Protocol):
@@ -29,6 +40,10 @@ class FirebaseAuthVerifier:
         initialize_firebase(settings)
 
     async def verify(self, token: str) -> AuthenticatedOwner:
+        identity = await self.verify_identity(token)
+        return AuthenticatedOwner(owner_id=identity.uid)
+
+    async def verify_identity(self, token: str) -> FirebaseIdentity:
         if not token:
             raise AuthenticationError("authentication token is required")
         try:
@@ -38,7 +53,11 @@ class FirebaseAuthVerifier:
         subject = claims.get("uid")
         if not isinstance(subject, str) or not subject:
             raise AuthenticationError("authentication token has no owner identity")
-        return AuthenticatedOwner(owner_id=subject)
+        return FirebaseIdentity(
+            uid=subject,
+            email=claims.get("email") if isinstance(claims.get("email"), str) else None,
+            email_verified=claims.get("email_verified") is True,
+        )
 
 
 class StaticTokenVerifier:
@@ -52,3 +71,49 @@ class StaticTokenVerifier:
         if owner_id is None:
             raise AuthenticationError("invalid authentication token")
         return AuthenticatedOwner(owner_id=owner_id)
+
+
+async def get_current_user(
+    request: Request,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(HTTPBearer(auto_error=False))
+    ],
+) -> AuthenticatedOwner:
+    """Reusable DI dependency for application Bearer access tokens."""
+    if credentials is None:
+        raise HTTPException(
+            401, {"code": "authentication_required", "detail": "Bearer token is required"}
+        )
+    token = credentials.credentials.strip()
+    verifier: TokenVerifier = request.app.state.token_verifier
+    try:
+        current = await verifier.verify(token)
+        auth_service = getattr(request.app.state, "authentication_service", None)
+        if auth_service is not None:
+            try:
+                await auth_service.resolve_active_user(UUID(current.owner_id))
+            except PermissionError as exc:
+                raise HTTPException(
+                    403, {"code": "user_disabled", "detail": "user is disabled"}
+                ) from exc
+            except (AuthenticationError, ValueError) as exc:
+                raise HTTPException(
+                    401, {"code": "authentication_failed", "detail": "invalid access token"}
+                ) from exc
+        return current
+    except HTTPException:
+        raise
+    except AuthenticationError as exc:
+        raise HTTPException(
+            401, {"code": "authentication_failed", "detail": "invalid access token"}
+        ) from exc
+
+
+__all__ = [
+    "AuthenticatedOwner",
+    "FirebaseIdentity",
+    "FirebaseAuthVerifier",
+    "StaticTokenVerifier",
+    "TokenVerifier",
+    "get_current_user",
+]

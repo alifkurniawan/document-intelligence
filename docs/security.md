@@ -1,7 +1,9 @@
 # Security notes
 
-- Firebase ID tokens are verified by the Firebase adapter; the stable Firebase UID is
-  the owner identity. Missing, invalid, or owner-mismatched requests are rejected.
+- Firebase ID tokens are verified by Firebase Admin; the stable Firebase UID is the
+  external identity key. Missing or invalid credentials are rejected.
+- Application access tokens are backend-signed and short-lived. Refresh sessions are
+  stored as SHA-256 hashes, allowing independent revocation and rotation.
 - Document reads are owner-scoped. PostgreSQL records metadata and references only;
   binary contents stay in the configured artifact store.
 - Filenames reject traversal/path separators and NUL bytes. Validation uses detected

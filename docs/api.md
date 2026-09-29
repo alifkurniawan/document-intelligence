@@ -1,14 +1,17 @@
 # API contract
 
 The API is served by `app.api.app:app`. Interactive OpenAPI documentation is available at
-`/docs` when the service is running. All document routes require a Firebase ID token
-in `Authorization: Bearer <token>`.
+`/docs` when the service is running. All document routes require an application access
+token in `Authorization: Bearer <token>`; Firebase ID tokens are used only at exchange.
 
 ## Endpoints
 
 | Method | Path | Purpose | Success |
 | --- | --- | --- | --- |
 | GET | `/health` | Liveness check; no authentication | `200 {"status":"ok"}` |
+| POST | `/auth/token` | Exchange a verified Firebase ID token | Access and refresh tokens |
+| POST | `/auth/refresh` | Rotate a refresh session and issue new tokens | Access and refresh tokens |
+| POST | `/auth/logout` | Revoke a refresh session | `204` |
 | POST | `/documents` | Register one authenticated original | `200 DocumentUploadResponse` |
 | GET | `/documents/{document_id}` | Read owner-scoped metadata and job status | `200 DocumentUploadResponse` |
 | GET | `/documents/{document_id}/original` | Stream the owner-scoped immutable original | `200` with the stored MIME type |
@@ -24,7 +27,7 @@ Example:
 
 ```shell
 curl -X POST http://127.0.0.1:8000/documents \
-  -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -F "file=@contract.pdf"
 ```
 
@@ -41,9 +44,19 @@ the same metadata shape and the current job status. The original endpoint return
 stored bytes with `Content-Type` matching the validated MIME type and an attachment
 filename. It never returns a derivative or processing result.
 
-Ownership is enforced by querying with the authenticated Firebase UID. A document
+Ownership is enforced by querying with the authenticated application user ID. A document
 owned by another account is indistinguishable from a missing document and returns
 `404`.
+
+### Authentication lifecycle
+
+The client authenticates with Firebase, exchanges the Firebase ID token at
+`POST /auth/token`, and uses the returned short-lived access token for API calls. When
+needed, `POST /auth/refresh` validates and rotates the independently stored refresh
+session. `POST /auth/logout` revokes that session; it does not sign the user out of
+Firebase. Authentication failures return `401`, while disabled application users return
+`403`. Token lifetimes are configurable with `ACCESS_TOKEN_EXPIRE_SECONDS` and
+`REFRESH_TOKEN_EXPIRE_SECONDS`.
 
 ### Errors
 

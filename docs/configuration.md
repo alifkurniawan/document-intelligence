@@ -27,6 +27,10 @@ a local `.env`. Copy `.env.example` for local names; it contains no credentials.
 | `FIREBASE_PROJECT_ID` | unset | Required in production |
 | `FIREBASE_CREDENTIALS_PATH` | unset | Service credential path; never commit it |
 | `FIREBASE_STORAGE_BUCKET` | unset | Required in production |
+| `JWT_SIGNING_KEY` | unset | Application access-token signing secret; required in production |
+| `AUTH_ISSUER` / `AUTH_AUDIENCE` | platform defaults | JWT validation values |
+| `ACCESS_TOKEN_EXPIRE_SECONDS` | `900` | Short-lived application access token lifetime |
+| `REFRESH_TOKEN_EXPIRE_SECONDS` | `2592000` | Refresh-session lifetime |
 | `STORAGE_BACKEND` | `filesystem` | `filesystem` locally, `firebase` in production |
 | `STORAGE_ROOT` | `.data/artifacts` | Local artifact root |
 
