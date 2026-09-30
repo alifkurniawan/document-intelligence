@@ -22,6 +22,11 @@ services:
       FIREBASE_PROJECT_ID: "${FIREBASE_PROJECT_ID:-}"
       FIREBASE_CREDENTIALS_PATH: "${FIREBASE_CREDENTIALS_PATH:-/run/secrets/firebase-service-account.json}"
       FIREBASE_STORAGE_BUCKET: "${FIREBASE_STORAGE_BUCKET:-}"
+      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be set in .env}"
+      AUTH_ISSUER: "${AUTH_ISSUER:-legal-document-intelligence-platform}"
+      AUTH_AUDIENCE: "${AUTH_AUDIENCE:-legal-document-intelligence-platform-api}"
+      ACCESS_TOKEN_EXPIRE_SECONDS: "${ACCESS_TOKEN_EXPIRE_SECONDS:-900}"
+      REFRESH_TOKEN_EXPIRE_SECONDS: "${REFRESH_TOKEN_EXPIRE_SECONDS:-2592000}"
       STORAGE_BACKEND: "${STORAGE_BACKEND:-filesystem}"
       STORAGE_ROOT: "${STORAGE_ROOT:-/app/.data/artifacts}"
       ALLOWED_EXTENSIONS: "${ALLOWED_EXTENSIONS:-.pdf,.jpg,.jpeg,.png,.docx,.xlsx}"
@@ -48,6 +53,9 @@ services:
       RABBITMQ_DLQ_QUEUE: "${RABBITMQ_DLQ_QUEUE:-document-processing-dlq}"
       RABBITMQ_PREFETCH_COUNT: "${RABBITMQ_PREFETCH_COUNT:-10}"
       RABBITMQ_PUBLISH_TIMEOUT_SECONDS: "${RABBITMQ_PUBLISH_TIMEOUT_SECONDS:-10}"
+      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be set in .env}"
+      AUTH_ISSUER: "${AUTH_ISSUER:-legal-document-intelligence-platform}"
+      AUTH_AUDIENCE: "${AUTH_AUDIENCE:-legal-document-intelligence-platform-api}"
     volumes:
       - "./google-service-account-key.json:/run/secrets/firebase-service-account.json:ro"
     depends_on:

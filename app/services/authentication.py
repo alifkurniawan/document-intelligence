@@ -75,12 +75,15 @@ class ApplicationTokenService:
 
 class AuthenticationService:
     def __init__(
-        self, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        settings: Settings,
+        token_service: ApplicationTokenService | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.settings = settings
         self.firebase_verifier = FirebaseAuthVerifier(settings)
-        self.tokens = ApplicationTokenService(settings)
+        self.tokens = token_service or ApplicationTokenService(settings)
 
     async def exchange_firebase_token(self, id_token: str) -> TokenPair:
         identity = await self.firebase_verifier.verify_identity(id_token)

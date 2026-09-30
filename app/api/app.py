@@ -50,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.settings = configured
     application.state.registration_service = None
     application.state.token_verifier = None
+    application.state.application_token_service = ApplicationTokenService(configured)
     application.state.authentication_service = None
 
     @application.middleware("http")
@@ -134,7 +135,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def get_token_verifier() -> TokenVerifier:
         if application.state.token_verifier is None:
-            token_service = ApplicationTokenService(configured)
+            token_service = application.state.application_token_service
 
             class ApplicationAccessTokenVerifier:
                 async def verify(self, token: str) -> AuthenticatedOwner:
@@ -148,7 +149,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if application.state.authentication_service is None and configured.database_url is not None:
             engine = create_engine(configured)
             factory = async_sessionmaker(engine, expire_on_commit=False)
-            application.state.authentication_service = AuthenticationService(factory, configured)
+            application.state.authentication_service = AuthenticationService(
+                factory,
+                configured,
+                token_service=application.state.application_token_service,
+            )
         if application.state.authentication_service is not None:
             get_token_verifier()
         return application.state.authentication_service
