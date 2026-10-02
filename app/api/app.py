@@ -5,26 +5,25 @@ from __future__ import annotations
 import logging
 import logging.config
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.api.auth import AuthenticatedOwner, TokenVerifier
+from app.api.exception_handlers import register_exception_handlers
 from app.api.routes.authentication import create_auth_router
 from app.api.routes.documents import create_document_router
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine
 from app.core.observability import (
     CorrelationFilter,
-    correlation_id,
-    metrics,
     new_correlation_id,
     set_correlation_id,
 )
 from app.repositories.document import SqlAlchemyMetadataUnitOfWork
+from app.schemas.responses import ApiResponse
 from app.services.authentication import ApplicationTokenService, AuthenticationService
 from app.services.document_ingestion import DocumentIngestionService
+from app.services.document_management import DocumentManagementService
 from app.services.validation import FileValidator
 
 
@@ -49,9 +48,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application = FastAPI(title="Legal Document Intelligence Platform")
     application.state.settings = configured
     application.state.registration_service = None
+    application.state.document_management_service = None
     application.state.token_verifier = None
     application.state.application_token_service = ApplicationTokenService(configured)
     application.state.authentication_service = None
+    register_exception_handlers(application)
 
     @application.middleware("http")
     async def correlation_middleware(request: Request, call_next):
@@ -61,56 +62,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers["X-Correlation-ID"] = request_id
         return response
 
-    @application.exception_handler(HTTPException)
-    async def http_error_handler(request: Request, exc: HTTPException):
-        detail = (
-            exc.detail
-            if isinstance(exc.detail, dict)
-            else {"code": "http_error", "detail": str(exc.detail)}
-        )
-        request_id = correlation_id()
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "code": detail.get("code", "http_error"),
-                "detail": detail.get("detail", "request failed"),
-                "correlation_id": request_id,
-            },
-            headers={"X-Correlation-ID": request_id},
-        )
-
-    @application.exception_handler(RequestValidationError)
-    async def request_validation_error_handler(request: Request, exc: RequestValidationError):
-        request_id = correlation_id()
-        metrics.increment("api_validation_failures")
-        return JSONResponse(
-            status_code=422,
-            content={
-                "code": "invalid_request",
-                "detail": "request validation failed",
-                "correlation_id": request_id,
-            },
-            headers={"X-Correlation-ID": request_id},
-        )
-
-    @application.exception_handler(Exception)
-    async def unexpected_error_handler(request: Request, exc: Exception):
-        logging.getLogger(__name__).exception("unhandled request failure")
-        metrics.increment("api_unexpected_failures")
-        request_id = correlation_id()
-        return JSONResponse(
-            status_code=500,
-            content={
-                "code": "internal_error",
-                "detail": "internal server error",
-                "correlation_id": request_id,
-            },
-            headers={"X-Correlation-ID": request_id},
-        )
-
-    @application.get("/health", response_model=dict[str, str])
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
+    @application.get("/health", response_model=ApiResponse[dict[str, str]])
+    async def health() -> ApiResponse[dict[str, str]]:
+        return ApiResponse(data={"status": "ok"}, message="Service is healthy.")
 
     def get_registration_service() -> DocumentIngestionService:
         if application.state.registration_service is None:
@@ -158,15 +112,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             get_token_verifier()
         return application.state.authentication_service
 
-    def get_unit_of_work_factory():
-        service = get_registration_service()
-        return service.unit_of_work_factory if service is not None else None
+    def get_document_management_service() -> DocumentManagementService | None:
+        if application.state.document_management_service is None:
+            ingestion_service = get_registration_service()
+            if ingestion_service is None:
+                return None
+            application.state.document_management_service = DocumentManagementService(
+                unit_of_work_factory=ingestion_service.unit_of_work_factory,
+                storage=ingestion_service.storage,
+            )
+        return application.state.document_management_service
 
     application.include_router(
         create_document_router(
             get_registration_service=get_registration_service,
-            get_token_verifier=get_token_verifier,
-            get_uow_factory=get_unit_of_work_factory,
+            get_document_management_service=get_document_management_service,
         )
     )
     application.include_router(

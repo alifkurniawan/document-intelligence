@@ -20,19 +20,23 @@ The current backend uses Python 3.14, FastAPI, PostgreSQL, SQLAlchemy, Alembic, 
 
 **Owns:** HTTP routing, request/response schemas, authentication context integration, and HTTP status mapping.
 
-**Must not own:** Ingestion business rules, transaction orchestration, direct SQL, object-storage implementation, or message publishing logic.
+**Must not own:** Ingestion business rules, transaction orchestration, direct SQL, opening units of work or calling repositories, object-storage implementation, or message publishing logic.
 
-**Constraints:** API handlers call application services. Schemas are not used as domain entities by accident.
+**Constraints:** API handlers call application services; route handlers never open units of work or call repositories. Every JSON success/error uses the shared `{data, message}` envelope. Collection responses use the shared page shape and database-backed pagination. Global exception handlers map typed application errors to the same error envelope. Schemas are not used as domain entities by accident.
 
 ## PostgreSQL and SQLAlchemy
 
 **Why:** PostgreSQL provides durable transactional metadata storage; SQLAlchemy provides a maintainable ORM and database abstraction.
 
-**Owns:** Documents, artifacts, jobs, ownership metadata, state, hashes, storage references, timestamps, and indexes; SQLAlchemy maps these records and manages database access.
+**Owns:** Documents, artifacts, jobs, ownership metadata, state, hashes, storage references, timestamps, soft-delete markers and deleting actor, and indexes; SQLAlchemy maps these records and manages database access.
 
 **Must not own:** Binary document contents, file validation policy, object storage, or RabbitMQ delivery.
 
-**Constraints:** Store metadata only, use transactions for document/artifact/job coordination, enforce uniqueness and state invariants in the schema where appropriate, and avoid leaking ORM models into the domain/application contract.
+**Constraints:** Store metadata only, use transactions for document/artifact/job coordination, enforce uniqueness and state invariants in the schema where appropriate, retain soft-deleted metadata for audit, and avoid leaking ORM models into the domain/application contract.
+
+Owner-scoped document listing applies its soft-delete filter, count, offset, and limit
+in PostgreSQL. Pagination defaults and maximum page size are defined at the API boundary;
+the response carries `current_page`, `total_data`, and `total_page`.
 
 ## Alembic
 
@@ -134,7 +138,7 @@ The current package structure follows this flow:
 API routes/schemas + auth
           |
           v
-application services (ingestion, validation, recovery)
+application services (ingestion, document management, validation, recovery)
           |
           +--> models/entities ---------> repositories -> PostgreSQL metadata/outbox
           |
@@ -145,14 +149,19 @@ application services (ingestion, validation, recovery)
           +--> core/config, database, observability, provider initialization
 ```
 
-* `app/api` owns FastAPI bootstrap, routes, authentication context, and HTTP mapping.
+* `app/api` owns FastAPI bootstrap, routes, authentication context, and the global exception-handler registration in `app/api/exception_handlers.py`.
 * `app/core` owns settings, database setup, Firebase initialization, observability, and shared errors.
 * `app/models` owns provider-neutral entities plus SQLAlchemy database models.
-* `app/services` owns validation, ingestion orchestration, and recovery workflows.
-* `app/repositories` owns SQLAlchemy repositories and `SqlAlchemyMetadataUnitOfWork`.
+* `app/services` owns validation, ingestion and document-management orchestration, and recovery workflows. Services open Unit of Work contexts and call repositories.
+* `app/repositories` owns SQLAlchemy repositories and the `SqlAlchemyMetadataUnitOfWork` implementation; routes must not invoke it.
 * `app/storage` owns the artifact-storage protocol and filesystem/Firebase adapters.
 * `app/workers` owns processing contracts, RabbitMQ integration, outbox dispatch, and worker runtime.
-* `app/schemas` owns API response models.
+* `app/schemas` owns request/response models, including the generic response envelope and pagination metadata.
+
+`main.py` is the local API launcher. Shared PyCharm run configurations under `.run/`
+run the API and outbox worker against the project interpreter. Their `.env` supplies
+host-facing database and broker URLs; Compose uses separate `DATABASE_URL_DOCKER` and
+`RABBITMQ_URL_DOCKER` overrides so containers retain service DNS names.
 
 The API process and outbox worker are separate runtimes of the same modular monolith, not separate domain services. Use interfaces only at meaningful external boundaries: authentication, repositories/unit of work, artifact storage, message publishing, and validation/inspection. Do not add speculative ports, event buses, or microservices.
 
@@ -165,7 +174,7 @@ outside this capability.
 
 ## Configuration and secrets
 
-All environment-specific values come from environment variables loaded from a local `.env` during development and injected by the deployment environment in production. This includes PostgreSQL and RabbitMQ URLs, Firebase project/configuration, storage bucket, file limits, supported MIME types/extensions, queue names, retry settings, and environment name. `.env` files containing secrets are ignored and `.env.example` documents required names without credentials. No credentials or connection strings are hard-coded.
+All environment-specific values come from environment variables loaded from a local `.env` during development and injected by the deployment environment in production. This includes PostgreSQL and RabbitMQ URLs, Firebase project/configuration, storage bucket, file limits, supported MIME types/extensions, queue names, retry settings, JWT signing key, and environment name. The JWT signing key is stable across issuance and verification and across application restarts; production runtimes must inject the same key into every API instance. `.env` files containing secrets are ignored and `.env.example` documents required names without credentials. No credentials or connection strings are hard-coded.
 
 ## Testing, linting, and formatting
 
@@ -177,4 +186,4 @@ Use the repository's Python dependency manager and lockfile (currently `pyprojec
 
 ## Containerization
 
-Provide containerization only for reproducible local and deployment environments: an application image plus PostgreSQL and RabbitMQ service dependencies, with Firebase accessed through configured credentials or test doubles. Containers must receive configuration through environment variables and must not bake secrets into images.
+Provide containerization only for reproducible local and deployment environments: an application image plus PostgreSQL and RabbitMQ service dependencies, with Firebase accessed through configured credentials or test doubles. Local development may start only the PostgreSQL and RabbitMQ Compose services while running the API and worker in PyCharm. Host-facing and container-facing connection URLs must remain distinct. Containers must receive configuration through environment variables and must not bake secrets into images.

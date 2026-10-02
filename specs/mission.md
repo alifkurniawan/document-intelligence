@@ -117,15 +117,35 @@ is owner-scoped, returns newest documents first, and exposes metadata and proces
 status without returning original bytes. It must not reveal documents belonging to
 another account.
 
+## API response constitution
+
+Every JSON success or error response uses the envelope `{ "data": ..., "message": "..." }`.
+Errors keep their stable error code and correlation ID inside `data`; `message` is the
+human-readable text. Route handlers return schema models from `app/schemas` and do not
+invent endpoint-specific envelope shapes.
+
+Every list response is paginated in the persistence query and uses
+`{ "data": { "data": [...], "current_page": n, "total_data": n, "total_page": n },
+"message": "..." }`. Pagination is owner-scoped and excludes soft-deleted documents.
+The original-download endpoint remains an API response by returning the authorized
+original as Base64 within the same envelope; the stored original remains outside
+PostgreSQL and RabbitMQ.
+
+An owner may hide a document from their list with a soft delete. Soft deletion retains
+the document metadata and original artifact, records the deletion timestamp and
+authenticated application user ID that performed it, and removes the record from
+ordinary list results. Owner-scoped detail reads retain the deletion marker for audit.
+
 ## Current module boundaries
 
 The Python package is intentionally split by responsibility:
 
 * `app/api` owns FastAPI bootstrap, routes, authentication integration, and HTTP error mapping.
+* `app/api/exception_handlers.py` owns global mapping of application, validation, HTTP, and unexpected exceptions to the public error envelope.
 * `app/core` owns settings, database engine/session setup, Firebase initialization, observability, and shared errors.
 * `app/models` owns provider-neutral entities and SQLAlchemy persistence models.
-* `app/services` owns validation, ingestion orchestration, and recovery workflows.
-* `app/repositories` owns database repository implementations and the metadata unit of work.
+* `app/services` owns validation, ingestion and document-management orchestration, and recovery workflows. Services open units of work and coordinate repositories.
+* `app/repositories` owns database repository implementations and the metadata unit-of-work implementation; API routes do not call either directly.
 * `app/storage` owns artifact-storage ports and filesystem/Firebase implementations.
 * `app/workers` owns processing contracts, RabbitMQ publishing, outbox dispatch, and worker runtime.
 * `app/schemas` owns API request/response models.
@@ -145,6 +165,8 @@ These are package boundaries inside one deployable backend, not separate service
 9. Load credentials, connection strings, and configuration from environment variables; never hard-code secrets.
 10. Validate type, extension, size, readability/integrity, and appropriate basic format properties before acceptance.
 11. Make retries safe and observable without overcomplicating the first implementation.
+12. Keep Unit of Work and repository calls inside application services; HTTP endpoints handle HTTP input/output and delegate use cases.
+13. Use the shared JSON response envelope and database-backed pagination for every JSON collection response.
 
 ## Important invariants
 
@@ -156,6 +178,7 @@ These are package boundaries inside one deployable backend, not separate service
 * A processing job is created only after the document and original-artifact metadata can be durably resolved.
 * A user can operate only on documents allowed for that account; the initial authorization model is account ownership.
 * Document listings are owner-scoped and never disclose another account's documents.
+* Soft-deleted documents are omitted from ordinary lists; their metadata and original artifact remain, with deletion time and actor recorded.
 * Downstream processing can be retried from the original artifact.
 * Document Understanding processing has observable status and supports retry, permanent failure reporting, and reprocessing.
 * Intermediate processing data and derived semantic data never replace the original artifact.

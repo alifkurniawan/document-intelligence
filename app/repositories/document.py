@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -50,6 +50,8 @@ def _document_entity(model: DocumentModel, original_artifact_id: UUID | None) ->
         created_at=_aware(model.created_at),
         updated_at=_aware(model.updated_at),
         original_artifact_id=original_artifact_id,
+        deleted_at=_aware(model.deleted_at) if model.deleted_at is not None else None,
+        deleted_by=model.deleted_by,
     )
 
 
@@ -115,13 +117,15 @@ class SqlAlchemyDocumentRepository:
         )
         return _document_entity(model, original_artifact_id)
 
-    async def list(self, *, owner_id: str) -> list[Document]:
+    async def list(self, *, owner_id: str, offset: int = 0, limit: int = 20) -> list[Document]:
         """Return documents visible to one owner, newest first."""
         models = (
             await self.session.scalars(
                 select(DocumentModel)
-                .where(DocumentModel.owner_id == owner_id)
-                .order_by(DocumentModel.created_at.desc())
+                .where(DocumentModel.owner_id == owner_id, DocumentModel.deleted_at.is_(None))
+                .order_by(DocumentModel.created_at.desc(), DocumentModel.document_id.desc())
+                .offset(offset)
+                .limit(limit)
             )
         ).all()
         documents = []
@@ -134,6 +138,38 @@ class SqlAlchemyDocumentRepository:
             )
             documents.append(_document_entity(model, original_artifact_id))
         return documents
+
+    async def count(self, *, owner_id: str) -> int:
+        """Count visible documents for one owner."""
+        total = await self.session.scalar(
+            select(func.count())
+            .select_from(DocumentModel)
+            .where(DocumentModel.owner_id == owner_id, DocumentModel.deleted_at.is_(None))
+        )
+        return int(total or 0)
+
+    async def mark_deleted(self, document_id: UUID, *, owner_id: str) -> Document | None:
+        """Soft-delete an owner's document, retaining who and when for audit."""
+        model = await self.session.scalar(
+            select(DocumentModel)
+            .where(DocumentModel.document_id == document_id, DocumentModel.owner_id == owner_id)
+            .with_for_update()
+        )
+        if model is None:
+            return None
+        if model.deleted_at is None:
+            document = _document_entity(model, None).mark_deleted(deleted_by=owner_id)
+            model.deleted_at = document.deleted_at
+            model.deleted_by = document.deleted_by
+            model.updated_at = document.updated_at
+            await self.session.flush()
+        original_artifact_id = await self.session.scalar(
+            select(ArtifactModel.artifact_id).where(
+                ArtifactModel.document_id == document_id,
+                ArtifactModel.role == ArtifactRole.ORIGINAL.value,
+            )
+        )
+        return _document_entity(model, original_artifact_id)
 
 
 class SqlAlchemyArtifactRepository:

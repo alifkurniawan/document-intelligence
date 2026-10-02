@@ -19,10 +19,34 @@ uv run uvicorn app.api.app:app --reload
 curl http://127.0.0.1:8000/health
 ```
 
-The response is `{"status":"ok"}`. Configuration is read from unprefixed environment
+The response is `{"data":{"status":"ok"},"message":"Service is healthy."}`.
+Configuration is read from unprefixed environment
 variables or a local `.env` file. Supported environments are `development`, `test`, and
 `production`; production requires database, RabbitMQ, and Firebase settings. See
 `.env.example` for the complete reference. `LOG_LEVEL` defaults to `INFO`.
+
+### PyCharm debugger with Compose dependencies
+
+The shared `.run` folder includes **API Local** and **Outbox Worker Local** Python
+run/debug configurations. Open this project in PyCharm with its project interpreter
+set to `.venv`, then choose **API Local** and click **Debug**. The API reads `.env`
+from the project root. To also publish queued jobs, run **Outbox Worker Local** in a
+second debugger session.
+
+Start only the database and broker in Docker Compose; the API and worker run in
+PyCharm:
+
+```shell
+docker compose --profile integration up -d postgres rabbitmq
+uv run alembic upgrade head
+```
+
+The local `.env` uses `localhost` for the PyCharm processes. Compose keeps the
+container-only hostnames `postgres` and `rabbitmq` through `DATABASE_URL_DOCKER` and
+`RABBITMQ_URL_DOCKER`, so both run modes can share the same `.env`. `DATABASE_URL`
+and `RABBITMQ_URL` use the default Compose credentials and published ports. Firebase
+login requires a local service-account file at `FIREBASE_CREDENTIALS_PATH`; keep that
+file out of Git. `GET /health` is available at `http://127.0.0.1:8000/health`.
 
 RabbitMQ uses one durable processing queue, publisher confirms, three bounded
 exponential-backoff retries, and a durable Dead Letter Queue. Accepted uploads write a
@@ -87,8 +111,9 @@ To format files, run `uv run ruff format .`.
 
 Every HTTP response includes `X-Correlation-ID`; clients may provide a safe
 `X-Correlation-ID` value and the service propagates it to logs and processing
-messages. Public errors use `{code, detail, correlation_id}` and never expose
-provider credentials or document bytes. Metrics are defined for API failures,
+messages. JSON responses use `{data, message}`; errors use `{data: {code,
+correlation_id}, message}`. Error messages never expose provider credentials or
+document bytes. Metrics are defined for API failures,
 outbox publication, retries, dead letters, and recovery outcomes.
 
 Recovery is operator-triggered and dry-run-first. See

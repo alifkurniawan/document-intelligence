@@ -11,11 +11,13 @@ a local `.env`. Copy `.env.example` for local names; it contains no credentials.
 | `MAX_UPLOAD_SIZE_BYTES` | `26214400` | 25 MiB default |
 | `ALLOWED_EXTENSIONS` | `.pdf,.jpg,.jpeg,.png,.docx,.xlsx` | Comma-separated |
 | `ALLOWED_MIME_TYPES` | PDF, JPEG, PNG, DOCX, XLSX MIME types | Comma-separated |
-| `DATABASE_URL` | unset | PostgreSQL URL; required in production |
+| `DATABASE_URL` | unset | Application PostgreSQL URL; required in production. For PyCharm with Compose services, use `postgresql://app:app@localhost:5432/app`. |
+| `DATABASE_URL_DOCKER` | Compose service default | Compose-only override; defaults to the `postgres` service hostname. |
 | `DATABASE_ECHO` | `false` | SQLAlchemy logging |
 | `DATABASE_POOL_SIZE` / `DATABASE_MAX_OVERFLOW` | `5` / `10` | Async pool sizing |
 | `DATABASE_POOL_TIMEOUT_SECONDS` | `30` | Pool acquisition timeout |
-| `RABBITMQ_URL` | unset | Required in production |
+| `RABBITMQ_URL` | unset | Application RabbitMQ URL; required in production. For PyCharm with Compose services, use `amqp://guest:guest@localhost:5672/`. |
+| `RABBITMQ_URL_DOCKER` | Compose service default | Compose-only override; defaults to the `rabbitmq` service hostname. |
 | `RABBITMQ_EXCHANGE` / `RABBITMQ_QUEUE` | `document-ingestion` / `document-processing` | Durable topology names |
 | `RABBITMQ_ROUTING_KEY` | `document.process` | Processing route |
 | `RABBITMQ_RETRY_COUNT` | `3` | Fixed at exactly three |
@@ -25,7 +27,8 @@ a local `.env`. Copy `.env.example` for local names; it contains no credentials.
 | `RABBITMQ_PREFETCH_COUNT` | `10` | Consumer QoS |
 | `RABBITMQ_PUBLISH_TIMEOUT_SECONDS` | `10` | Publish operation timeout setting |
 | `FIREBASE_PROJECT_ID` | unset | Required in production |
-| `FIREBASE_CREDENTIALS_PATH` | unset | Service credential path; never commit it |
+| `FIREBASE_CREDENTIALS_PATH` | unset | Service credential path; never commit it. Local PyCharm can use `google-service-account-key.json`. |
+| `FIREBASE_CREDENTIALS_PATH_DOCKER` | Compose mount default | Compose-only override; defaults to `/run/secrets/firebase-service-account.json`. |
 | `FIREBASE_STORAGE_BUCKET` | unset | Required in production |
 | `JWT_SIGNING_KEY` | unset | Application access-token signing secret; required in production |
 | `AUTH_ISSUER` / `AUTH_AUDIENCE` | platform defaults | JWT validation values |

@@ -111,11 +111,17 @@ class Document:
     created_at: datetime
     updated_at: datetime
     original_artifact_id: UUID | None = None
+    deleted_at: datetime | None = None
+    deleted_by: str | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.owner_id, "owner_id")
         if self.created_at.tzinfo is None or self.updated_at.tzinfo is None:
             raise DomainError("document timestamps must be timezone-aware")
+        if (self.deleted_at is None) != (self.deleted_by is None):
+            raise DomainError("deleted_at and deleted_by must be set together")
+        if self.deleted_at is not None and self.deleted_at.tzinfo is None:
+            raise DomainError("deleted_at must be timezone-aware")
 
     @classmethod
     def create(cls, *, owner_id: str, document_id: UUID | None = None) -> Document:
@@ -141,6 +147,15 @@ class Document:
         if self.original_artifact_id is not None:
             raise OriginalArtifactError("a document can have only one original artifact")
         return replace(self, original_artifact_id=artifact.artifact_id, updated_at=_utc_now())
+
+    def mark_deleted(self, *, deleted_by: str, deleted_at: datetime | None = None) -> Document:
+        _require_text(deleted_by, "deleted_by")
+        if self.deleted_at is not None:
+            return self
+        timestamp = deleted_at or _utc_now()
+        if timestamp.tzinfo is None:
+            raise DomainError("deleted_at must be timezone-aware")
+        return replace(self, deleted_at=timestamp, deleted_by=deleted_by, updated_at=timestamp)
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Annotated, Protocol
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth
 
@@ -81,32 +81,18 @@ async def get_current_user(
 ) -> AuthenticatedOwner:
     """Reusable DI dependency for application Bearer access tokens."""
     if credentials is None:
-        raise HTTPException(
-            401, {"code": "authentication_required", "detail": "Bearer token is required"}
-        )
+        raise AuthenticationError("Bearer token is required")
     token = credentials.credentials.strip()
     verifier: TokenVerifier = request.app.state.token_verifier
-    try:
-        current = await verifier.verify(token)
-        auth_service = getattr(request.app.state, "authentication_service", None)
-        if auth_service is not None:
-            try:
-                await auth_service.resolve_active_user(UUID(current.owner_id))
-            except PermissionError as exc:
-                raise HTTPException(
-                    403, {"code": "user_disabled", "detail": "user is disabled"}
-                ) from exc
-            except (AuthenticationError, ValueError) as exc:
-                raise HTTPException(
-                    401, {"code": "authentication_failed", "detail": "invalid access token"}
-                ) from exc
-        return current
-    except HTTPException:
-        raise
-    except AuthenticationError as exc:
-        raise HTTPException(
-            401, {"code": "authentication_failed", "detail": "invalid access token"}
-        ) from exc
+    current = await verifier.verify(token)
+    auth_service = getattr(request.app.state, "authentication_service", None)
+    if auth_service is not None:
+        try:
+            user_id = UUID(current.owner_id)
+        except ValueError as exc:
+            raise AuthenticationError("invalid access token") from exc
+        await auth_service.resolve_active_user(user_id)
+    return current
 
 
 __all__ = [

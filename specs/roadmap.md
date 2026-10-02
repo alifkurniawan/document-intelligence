@@ -18,7 +18,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Centralize environment-driven settings.
 
-**Scope:** Typed settings, `.env.example`, environment validation, limits, allowlists, Firebase, PostgreSQL, RabbitMQ, and storage settings.
+**Scope:** Typed settings, `.env.example`, environment validation, limits, allowlists, Firebase, PostgreSQL, RabbitMQ, storage, and stable JWT-signing-key settings.
 
 **Deliverables:** `app/core/config.py`, `.env.example`, and configuration documentation.
 
@@ -60,7 +60,7 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Dependencies:** Phases 3–4.
 
-**Acceptance criteria:** Metadata can be created, queried by owner/document ID, and rolled back atomically in integration tests.
+**Acceptance criteria:** Metadata can be created, queried by owner/document ID, and rolled back atomically in integration tests. Services own Unit of Work execution; HTTP routes do not call repositories.
 
 ## Phase 6 — File storage abstraction — Complete (MVP)
 
@@ -102,17 +102,16 @@ The roadmap is intentionally incremental. Each phase should be independently rev
 
 **Objective:** Expose the first end-to-end ingestion workflow.
 
-**Scope:** Firebase email-auth token verification, ownership authorization, multipart upload, request/response schemas, status codes, and document information response.
+**Scope:** Firebase email-auth token verification, ownership authorization, multipart upload, request/response schemas, the shared JSON response envelope, paginated document listing, status codes, and document information response.
 
 **Deliverables:** Upload endpoint and OpenAPI examples.
 
 **Dependencies:** Phases 2 and 8.
 
-**Acceptance criteria:** An authenticated user can upload one supported document and receive `document_id`, original metadata, uploader/time metadata, and queued status without downstream processing delay.
+**Acceptance criteria:** An authenticated user can upload one supported document and receive the document information inside the shared `{data, message}` envelope, without downstream processing delay. JSON lists use the documented page envelope.
 
 Production hardening follow-ups remain for atomic Firebase non-overwrite semantics,
-Firebase SDK initialization, true streaming storage, stronger PDF integrity checks,
-and final error-schema alignment.
+Firebase SDK initialization, true streaming storage, and stronger PDF integrity checks.
 
 ## Phase 10 — RabbitMQ integration — Complete
 
@@ -193,9 +192,10 @@ deterministic focused tests, owner-scoped retrieval, and recovery seams are docu
 
 ## Phase 15 — Error handling and recovery — Complete
 
-**Status:** Complete for the current MVP slice. Correlation-aware error envelopes,
-safe operational logging, conservative reconciliation, bounded recovery contracts,
-metrics, and the recovery runbook are implemented.
+**Status:** Complete for the current MVP slice. Correlation-aware global exception
+handlers, a consistent error envelope, safe operational logging, conservative
+reconciliation, bounded recovery contracts, metrics, and the recovery runbook are
+implemented.
 
 **Objective:** Make failures diagnosable and recoverable.
 
@@ -220,8 +220,10 @@ metrics, and the recovery runbook are implemented.
 **Acceptance criteria:** A new developer can run the service and tests; an API consumer can perform authenticated single upload; operators understand storage, queue, retries, and recovery; future format additions have a documented extension path.
 
 Implemented in `README.md` and `docs/`: API contract, architecture decisions,
-configuration, deployment/migration guidance, security notes, recovery operations,
-Document Understanding boundary, and release checklist.
+configuration, deployment/migration guidance, PyCharm run/debug configurations,
+security notes, recovery operations, Document Understanding boundary, and release
+checklist. `main.py` launches the local API while PostgreSQL and RabbitMQ run from
+the integration Compose profile.
 
 ## Phase 17 — Document Understanding — Complete
 
@@ -258,3 +260,45 @@ artifact access, versioned document representations, provenance, semantic
 extraction, bounded retry, failure reporting, and reprocessing from an existing
 original artifact. Supported PDF, image/OCR, DOCX, and XLSX paths remain behind
 replaceable processing boundaries.
+
+## Phase 18 — Auditable document soft deletion — Complete
+
+**Objective:** Let an authenticated owner remove a document from their ordinary list while retaining its record and provenance.
+
+**Scope:** Owner-scoped `DELETE /documents/{document_id}`, persisted deletion timestamp and actor, list filtering, owner-visible audit fields, and an additive database migration.
+
+**Deliverables:** Soft-delete metadata, repository and API behavior, and API/mission documentation.
+
+**Dependencies:** Phases 3, 5, and 9.
+
+**Acceptance criteria:** A successful delete hides the document from the owner's list, retains the original and metadata, records the first authenticated deleting user and timestamp, and never changes another owner's record.
+
+Implemented with migration `0005_document_soft_delete`, idempotent owner-scoped deletion, and deletion actor/timestamp in detail and delete responses.
+
+## Phase 19 — Unified API responses and pagination — Complete
+
+**Objective:** Give clients one JSON response contract and bounded, query-backed document listing.
+
+**Scope:** Generic `{data, message}` success/error envelopes, paginated list payloads with `current_page`, `total_data`, and `total_page`, and envelope-compatible original-document retrieval.
+
+**Deliverables:** Shared schemas, global error-envelope mapping, SQL-backed list count/offset/limit, and API documentation.
+
+**Dependencies:** Phases 9, 15, and 18.
+
+**Acceptance criteria:** Every JSON route uses the shared envelope; the document list is owner-scoped, soft-delete filtered, and paginated in PostgreSQL; page size is bounded. Original bytes are represented as Base64 in the authorized JSON download response.
+
+Implemented in `app/schemas/responses.py`, document routes and repository pagination, and `app/api/exception_handlers.py`.
+
+## Phase 20 — Service-layer Unit of Work boundary — Complete
+
+**Objective:** Keep HTTP endpoints focused on request/response handling.
+
+**Scope:** Move document list, detail, soft-delete, and original-read repository workflows into an application service that owns Unit of Work execution.
+
+**Deliverables:** `DocumentManagementService` and API dependency wiring.
+
+**Dependencies:** Phases 5, 9, and 18.
+
+**Acceptance criteria:** API route handlers do not open Unit of Work contexts or call repositories; application services coordinate repositories and transactions.
+
+Implemented in `app/services/document_management.py`; `app/api/routes/documents.py` delegates those operations to the service.

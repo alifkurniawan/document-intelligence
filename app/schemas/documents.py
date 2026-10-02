@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from app.schemas.responses import ErrorResponse
+
 
 class OriginalMetadataResponse(BaseModel):
     filename: str
@@ -19,12 +21,27 @@ class DocumentUploadResponse(BaseModel):
     uploaded_at: str
     status: str
     job_id: str
+    deleted_at: str | None = None
+    deleted_by: str | None = None
 
 
-class ErrorResponse(BaseModel):
-    code: str
-    detail: str
-    correlation_id: str
+class DocumentDeleteResponse(BaseModel):
+    document_id: str
+    deleted_at: str
+    deleted_by: str
 
 
-__all__ = ["DocumentUploadResponse", "ErrorResponse", "OriginalMetadataResponse"]
+class OriginalDownloadResponse(BaseModel):
+    filename: str
+    mime_type: str
+    size_bytes: int
+    content_base64: str
+
+
+__all__ = [
+    "DocumentDeleteResponse",
+    "DocumentUploadResponse",
+    "ErrorResponse",
+    "OriginalDownloadResponse",
+    "OriginalMetadataResponse",
+]
